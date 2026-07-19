@@ -23,6 +23,7 @@ require_relative "omnisocials/resources/accounts"
 require_relative "omnisocials/resources/analytics"
 require_relative "omnisocials/resources/audio"
 require_relative "omnisocials/resources/locations"
+require_relative "omnisocials/resources/inbox"
 require_relative "omnisocials/resources/webhooks"
 require_relative "omnisocials/client"
 
