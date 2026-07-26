@@ -59,8 +59,8 @@ module OmniSocials
     ].freeze
 
     attr_reader :api_key, :base_url, :timeout, :max_retries,
-                :posts, :media, :folders, :accounts, :analytics, :audio,
-                :locations, :inbox, :webhooks
+                :posts, :media, :folders, :hashtag_sets, :accounts, :analytics,
+                :audio, :locations, :inbox, :webhooks
 
     # api_key     - API key (omsk_live_* / omsk_test_*). Falls back to the
     #               OMNISOCIALS_API_KEY environment variable. Raises
@@ -88,6 +88,7 @@ module OmniSocials
       @posts = Resources::Posts.new(self)
       @media = Resources::Media.new(self)
       @folders = Resources::Folders.new(self)
+      @hashtag_sets = Resources::HashtagSets.new(self)
       @accounts = Resources::Accounts.new(self)
       @analytics = Resources::Analytics.new(self)
       @audio = Resources::Audio.new(self)

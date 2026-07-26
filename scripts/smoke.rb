@@ -56,7 +56,9 @@ PLATFORM_KEYS = %i[pinterest youtube instagram facebook linkedin linkedin_page
                    tiktok x bluesky mastodon google_business].freeze
 CREATE_KEYS = (%i[channels scheduled_at media_ids media_urls type source
                   link_url link_title link_description link_thumbnail_url
-                  location_id collaborators user_tags] + PLATFORM_KEYS).freeze
+                  location_id collaborators user_tags hashtag_set
+                  hashtag_set_id hashtag_placement hashtag_platforms] +
+               PLATFORM_KEYS).freeze
 CREATE_AND_PUBLISH_KEYS = (CREATE_KEYS - [:scheduled_at]).freeze
 UPDATE_KEYS = (%i[content scheduled_at channels media_ids media_urls type
                   location_id collaborators user_tags] + PLATFORM_KEYS).freeze
@@ -93,6 +95,13 @@ EXPECTED_SURFACE = {
     create: [[:keyreq, :name], [:key, :parent_id]],
     update: [[:req, :folder_id]] + kw(%i[name parent_id]),
     delete: [[:req, :folder_id]]
+  },
+  hashtag_sets: {
+    list: [],
+    get: [[:req, :hashtag_set_id]],
+    create: [%i[keyreq name], %i[keyreq hashtags]],
+    update: [[:req, :hashtag_set_id]] + kw(%i[name hashtags]),
+    delete: [[:req, :hashtag_set_id]]
   },
   accounts: {
     list: [],
@@ -318,6 +327,20 @@ def check_body_building
   ok(
     fake.last.json == { "is_active" => false },
     "webhooks.update keeps false values while dropping nils"
+  )
+
+  hashtag_sets = OmniSocials::Resources::HashtagSets.new(fake)
+  hashtag_sets.create(name: "Launch", hashtags: %w[saas startup])
+  ok(
+    fake.last.path == "/hashtag-sets" &&
+      fake.last.json == { "name" => "Launch", "hashtags" => %w[saas startup] },
+    "hashtag_sets.create posts name + hashtags array"
+  )
+  hashtag_sets.update("7", hashtags: "#a #b")
+  ok(
+    fake.last.method == "PATCH" && fake.last.path == "/hashtag-sets/7" &&
+      fake.last.json == { "hashtags" => "#a #b" },
+    "hashtag_sets.update drops nils and passes a String hashtags through"
   )
 
   # media.upload input coercion: raw bytes, IO, and file path

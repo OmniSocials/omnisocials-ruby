@@ -6,6 +6,12 @@ module OmniSocials
     #
     # `content` is a plain String, or a per-platform Hash with a "default" key.
     # `media_ids` / `media_urls` are a flat Array, or a per-platform Hash.
+    # Each entry is a plain String, or a Hash with an "alt" accessibility
+    # description (max 1500 chars): `{ "url" => "https://...", "alt" => "..." }`
+    # for media_urls, `{ "id" => "...", "alt" => "..." }` for media_ids. Alt
+    # text is delivered to Mastodon (media description), Bluesky (embed alt),
+    # X (photos/GIFs), and Pinterest (pin alt text); the same entry shape works
+    # inside x/bluesky/mastodon `thread_parts` media.
     class Posts
       def initialize(client)
         @client = client
@@ -36,23 +42,35 @@ module OmniSocials
 
       # POST /posts/create - create a post (draft, or scheduled when
       # scheduled_at is set).
+      #
+      # hashtag_set (set name, case-insensitive) or hashtag_set_id applies a
+      # saved hashtag set once at create time; tags already in a caption are
+      # skipped; Instagram's 30-hashtag cap returns error code
+      # hashtag_limit_exceeded. hashtag_placement is "caption_append"
+      # (default) or "first_comment"; hashtag_platforms restricts the tags to
+      # a subset of channels.
       def create(content:, channels: nil, scheduled_at: nil, media_ids: nil,
                  media_urls: nil, type: nil, source: nil, link_url: nil,
                  link_title: nil, link_description: nil, link_thumbnail_url: nil,
                  location_id: nil, collaborators: nil, user_tags: nil,
-                 pinterest: nil, youtube: nil, instagram: nil, facebook: nil,
-                 linkedin: nil, linkedin_page: nil, tiktok: nil, x: nil,
-                 bluesky: nil, mastodon: nil, google_business: nil)
+                 hashtag_set: nil, hashtag_set_id: nil, hashtag_placement: nil,
+                 hashtag_platforms: nil, pinterest: nil, youtube: nil,
+                 instagram: nil, facebook: nil, linkedin: nil,
+                 linkedin_page: nil, tiktok: nil, x: nil, bluesky: nil,
+                 mastodon: nil, google_business: nil)
         body = create_body(
           content: content, channels: channels, scheduled_at: scheduled_at,
           media_ids: media_ids, media_urls: media_urls, type: type,
           source: source, link_url: link_url, link_title: link_title,
           link_description: link_description, link_thumbnail_url: link_thumbnail_url,
           location_id: location_id, collaborators: collaborators,
-          user_tags: user_tags, pinterest: pinterest, youtube: youtube,
-          instagram: instagram, facebook: facebook, linkedin: linkedin,
-          linkedin_page: linkedin_page, tiktok: tiktok, x: x, bluesky: bluesky,
-          mastodon: mastodon, google_business: google_business
+          user_tags: user_tags, hashtag_set: hashtag_set,
+          hashtag_set_id: hashtag_set_id, hashtag_placement: hashtag_placement,
+          hashtag_platforms: hashtag_platforms, pinterest: pinterest,
+          youtube: youtube, instagram: instagram, facebook: facebook,
+          linkedin: linkedin, linkedin_page: linkedin_page, tiktok: tiktok,
+          x: x, bluesky: bluesky, mastodon: mastodon,
+          google_business: google_business
         )
         @client.request("POST", "/posts/create", json: body)
       end
@@ -62,10 +80,12 @@ module OmniSocials
                              media_urls: nil, type: nil, source: nil,
                              link_url: nil, link_title: nil, link_description: nil,
                              link_thumbnail_url: nil, location_id: nil,
-                             collaborators: nil, user_tags: nil, pinterest: nil,
-                             youtube: nil, instagram: nil, facebook: nil,
-                             linkedin: nil, linkedin_page: nil, tiktok: nil,
-                             x: nil, bluesky: nil, mastodon: nil,
+                             collaborators: nil, user_tags: nil,
+                             hashtag_set: nil, hashtag_set_id: nil,
+                             hashtag_placement: nil, hashtag_platforms: nil,
+                             pinterest: nil, youtube: nil, instagram: nil,
+                             facebook: nil, linkedin: nil, linkedin_page: nil,
+                             tiktok: nil, x: nil, bluesky: nil, mastodon: nil,
                              google_business: nil)
         body = create_body(
           content: content, channels: channels, scheduled_at: nil,
@@ -73,10 +93,13 @@ module OmniSocials
           source: source, link_url: link_url, link_title: link_title,
           link_description: link_description, link_thumbnail_url: link_thumbnail_url,
           location_id: location_id, collaborators: collaborators,
-          user_tags: user_tags, pinterest: pinterest, youtube: youtube,
-          instagram: instagram, facebook: facebook, linkedin: linkedin,
-          linkedin_page: linkedin_page, tiktok: tiktok, x: x, bluesky: bluesky,
-          mastodon: mastodon, google_business: google_business
+          user_tags: user_tags, hashtag_set: hashtag_set,
+          hashtag_set_id: hashtag_set_id, hashtag_placement: hashtag_placement,
+          hashtag_platforms: hashtag_platforms, pinterest: pinterest,
+          youtube: youtube, instagram: instagram, facebook: facebook,
+          linkedin: linkedin, linkedin_page: linkedin_page, tiktok: tiktok,
+          x: x, bluesky: bluesky, mastodon: mastodon,
+          google_business: google_business
         )
         @client.request("POST", "/posts/create-and-publish", json: body)
       end
@@ -135,9 +158,11 @@ module OmniSocials
       def create_body(content:, channels:, scheduled_at:, media_ids:,
                       media_urls:, type:, source:, link_url:, link_title:,
                       link_description:, link_thumbnail_url:, location_id:,
-                      collaborators:, user_tags:, pinterest:, youtube:,
-                      instagram:, facebook:, linkedin:, linkedin_page:,
-                      tiktok:, x:, bluesky:, mastodon:, google_business:)
+                      collaborators:, user_tags:, hashtag_set:,
+                      hashtag_set_id:, hashtag_placement:, hashtag_platforms:,
+                      pinterest:, youtube:, instagram:, facebook:, linkedin:,
+                      linkedin_page:, tiktok:, x:, bluesky:, mastodon:,
+                      google_business:)
         Internal.drop_nil(
           {
             "content" => content,
@@ -154,6 +179,10 @@ module OmniSocials
             "location_id" => location_id,
             "collaborators" => collaborators,
             "user_tags" => user_tags,
+            "hashtag_set" => hashtag_set,
+            "hashtag_set_id" => hashtag_set_id,
+            "hashtag_placement" => hashtag_placement,
+            "hashtag_platforms" => hashtag_platforms,
             "pinterest" => pinterest,
             "youtube" => youtube,
             "instagram" => instagram,
