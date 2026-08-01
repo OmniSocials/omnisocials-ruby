@@ -132,12 +132,15 @@ posts = client.posts.list(status: "scheduled", limit: 50, offset: 0)
 post = client.posts.get("123")
 client.posts.update("123", scheduled_at: "2026-08-02T10:00:00Z")
 client.posts.publish("123")           # publish a draft or scheduled post now
+client.posts.retry("123")             # retry only the failed platforms of a failed/warning post
 client.posts.delete("123")            # returns nil (204)
 
 # Recent posts fetched live from the connected platforms (including content
 # published outside OmniSocials). Requires the analytics:read scope.
 recent = client.posts.recent_platform(limit: 10, platforms: ["instagram", "tiktok"])
 ```
+
+`retry` re-publishes only the platforms that failed, on the same post; platforms that already succeeded are never posted again. It is asynchronous: a 200 means the retry is queued, so poll `get` for the outcome. Max 3 retries per platform.
 
 ## Media
 
