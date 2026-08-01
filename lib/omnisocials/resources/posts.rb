@@ -10,8 +10,9 @@ module OmniSocials
     # description (max 1500 chars): `{ "url" => "https://...", "alt" => "..." }`
     # for media_urls, `{ "id" => "...", "alt" => "..." }` for media_ids. Alt
     # text is delivered to Mastodon (media description), Bluesky (embed alt),
-    # X (photos/GIFs), and Pinterest (pin alt text); the same entry shape works
-    # inside x/bluesky/mastodon `thread_parts` media.
+    # X (photos/GIFs), Pinterest (pin alt text), Instagram (images), and
+    # LinkedIn (images); the same entry shape works inside x/bluesky/mastodon
+    # `thread_parts` media.
     class Posts
       def initialize(client)
         @client = client
