@@ -50,6 +50,13 @@ module OmniSocials
       # hashtag_limit_exceeded. hashtag_placement is "caption_append"
       # (default) or "first_comment"; hashtag_platforms restricts the tags to
       # a subset of channels.
+      #
+      # When the post targets X and its text (or any thread part) contains a
+      # URL, the response includes a top-level "warnings" array (sibling of
+      # "data") with a "x_url_post_credits" entry carrying credits_required
+      # and credits_balance: X's link-post fee is passed through as prepaid
+      # credits, debited at publish time (from 2026-08-14). Credits are
+      # managed in the dashboard, not the API.
       def create(content:, channels: nil, scheduled_at: nil, media_ids: nil,
                  media_urls: nil, type: nil, source: nil, link_url: nil,
                  link_title: nil, link_description: nil, link_thumbnail_url: nil,
@@ -77,6 +84,7 @@ module OmniSocials
       end
 
       # POST /posts/create-and-publish - create and publish immediately.
+      # See #create for the "warnings" array on X link posts.
       def create_and_publish(content:, channels: nil, media_ids: nil,
                              media_urls: nil, type: nil, source: nil,
                              link_url: nil, link_title: nil, link_description: nil,
