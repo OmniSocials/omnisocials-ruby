@@ -23,7 +23,7 @@ module OmniSocials
       # GET /inbox/conversations - list conversations, newest activity first.
       #
       # All filters are optional: platform ("instagram", "facebook",
-      # "linkedin"), type ("dm", "comment", "mention"), unread (only
+      # "linkedin", "x"), type ("dm", "comment", "mention"), unread (only
       # conversations with unread messages), limit (1-100), and cursor (an
       # opaque cursor from a previous response's pagination["next_cursor"]).
       def list_conversations(platform: nil, type: nil, unread: nil, limit: nil, cursor: nil)
@@ -59,7 +59,16 @@ module OmniSocials
       #
       # `text` is required. Optionally attach a single media asset by public
       # URL with `attachment_url` plus `attachment_type` ("image", "video",
-      # "audio", or "file"). Returns the created outbound message.
+      # "audio", or "file"). Returns the created outgoing message.
+      #
+      # Replying to an X DM costs 2 prepaid credits, debited from the
+      # company balance before the send and automatically refunded if the
+      # send fails. Two 402 error codes are specific to this call:
+      # "insufficient_credits" when the balance can't cover the 2 credits,
+      # and "x_inbox_suspended" when the workspace's X inbox was
+      # auto-suspended after the balance hit zero (top up and re-enable it
+      # in the dashboard to resume; DMs that arrived while suspended are
+      # not recovered).
       def reply(conversation_id, text:, attachment_url: nil, attachment_type: nil)
         body = Internal.drop_nil(
           {

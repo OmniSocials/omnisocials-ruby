@@ -143,6 +143,26 @@ end
 
 From `enforce_from` (2026-08-14) the balance is checked at publish time, but credits are only deducted after the post successfully publishes (a failed publish is never charged). If the balance can't cover it, only the X target fails (other platforms publish normally); top up in the dashboard under Settings -> Organisation -> Billing -> Credits, then call `posts.retry`. Posts without links, analytics, and media on X stay free. There is no API endpoint for credits — they are managed in the dashboard.
 
+Separately, from 2026-08-14 `posts.create` / `posts.update` / `posts.publish` on X can refuse the request itself, up front, with a `402` and error code `x_credits_insufficient` (`error.details` carries `credits_required`, `credits_balance`, and `credits_reserved`) when reserving this post's cost would push the company's total reserved credits past its balance:
+
+```ruby
+begin
+  client.posts.create(
+    content: "Read the full story: https://example.com/post",
+    channels: ["x"],
+    scheduled_at: "2026-08-20T09:00:00Z"
+  )
+rescue OmniSocials::APIError => e
+  if e.code == "x_credits_insufficient"
+    puts "Not enough reserved credits: #{e.body["error"]["details"]}"
+  else
+    raise
+  end
+end
+```
+
+Drafts are never gated, and posts scheduled to publish before 2026-08-14 are never gated either.
+
 ### Other post operations
 
 ```ruby
@@ -309,6 +329,47 @@ client.posts.create(
   location_id: location_id
 )
 ```
+
+## Inbox
+
+Read and reply to social inbox conversations (DMs, comments, mentions) across connected platforms. Requires an API key with the opt-in `inbox:read` / `inbox:write` scopes. The list endpoints are cursor-paginated (unlike the offset pagination used elsewhere): page while `pagination["has_more"]` is true by passing the previous response's `pagination["next_cursor"]` as `cursor`.
+
+```ruby
+conversations = client.inbox.list_conversations(platform: "instagram", unread: true, limit: 20)
+conversations["data"].each do |conversation|
+  puts "#{conversation["platform"]}: #{conversation["preview"]}"
+end
+
+conversation_id = conversations["data"][0]["id"]
+messages = client.inbox.get_messages(conversation_id)
+messages["data"].each do |message|
+  puts "#{message["direction"]}: #{message["text"]}"  # direction is "incoming" or "outgoing"
+end
+
+client.inbox.mark_read(conversation_id)
+client.inbox.reply(conversation_id, text: "Thanks for reaching out!")
+```
+
+`platform` accepts `"instagram"`, `"facebook"`, `"linkedin"`, or `"x"`; `type` accepts `"dm"`, `"comment"`, or `"mention"`. Conversation ids are URL-encoded for you, so pass them exactly as returned - LinkedIn ids contain `":"` and `"()"` (e.g. `"linkedin_comment_urn:li:activity:123"`).
+
+Replying to an X DM costs 2 prepaid credits, debited from the company balance before the send and automatically refunded if the send fails:
+
+```ruby
+begin
+  client.inbox.reply(conversation_id, text: "On it, thanks!")
+rescue OmniSocials::APIError => e
+  case e.code
+  when "insufficient_credits"
+    puts "Not enough credits to send this reply (need 2)."
+  when "x_inbox_suspended"
+    puts "X inbox is suspended - top up and re-enable it in the dashboard."
+  else
+    raise
+  end
+end
+```
+
+`x_inbox_suspended` fires once a workspace's X inbox has auto-suspended after its credit balance hit zero; topping up and re-enabling it in the dashboard resumes delivery, but DMs that arrived while suspended are not recovered.
 
 ## Webhooks
 

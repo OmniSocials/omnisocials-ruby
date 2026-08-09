@@ -57,6 +57,14 @@ module OmniSocials
       # and credits_balance: X's link-post fee is passed through as prepaid
       # credits, debited at publish time (from 2026-08-14). Credits are
       # managed in the dashboard, not the API.
+      #
+      # Separately, from 2026-08-14 this call (and #update / #publish) can
+      # refuse an X link post up front with a 402 and error code
+      # "x_credits_insufficient" (details: credits_required, credits_balance,
+      # credits_reserved) when reserving this post's cost would push the
+      # company's total reserved credits past its balance. Drafts are never
+      # gated, and posts scheduled to publish before 2026-08-14 are never
+      # gated either.
       def create(content:, channels: nil, scheduled_at: nil, media_ids: nil,
                  media_urls: nil, type: nil, source: nil, link_url: nil,
                  link_title: nil, link_description: nil, link_thumbnail_url: nil,
@@ -84,7 +92,8 @@ module OmniSocials
       end
 
       # POST /posts/create-and-publish - create and publish immediately.
-      # See #create for the "warnings" array on X link posts.
+      # See #create for the "warnings" array and the 402
+      # "x_credits_insufficient" credit gate on X link posts.
       def create_and_publish(content:, channels: nil, media_ids: nil,
                              media_urls: nil, type: nil, source: nil,
                              link_url: nil, link_title: nil, link_description: nil,
@@ -119,6 +128,9 @@ module OmniSocials
       # x: { "thread_parts" => nil } still clears an X thread (reverts the
       # post to single-tweet mode). The same applies to bluesky and mastodon
       # thread parts.
+      #
+      # See #create for the 402 "x_credits_insufficient" credit gate that
+      # can also refuse an update to a scheduled X link post.
       def update(post_id, content: nil, scheduled_at: nil, channels: nil,
                  media_ids: nil, media_urls: nil, type: nil, location_id: nil,
                  collaborators: nil, user_tags: nil, pinterest: nil,
@@ -158,6 +170,8 @@ module OmniSocials
       end
 
       # POST /posts/{id}/publish - publish a draft or scheduled post now.
+      # See #create for the 402 "x_credits_insufficient" credit gate that
+      # can also refuse publishing a scheduled X link post.
       def publish(post_id)
         @client.request("POST", "/posts/#{post_id}/publish")
       end
