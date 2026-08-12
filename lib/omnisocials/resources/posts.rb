@@ -73,7 +73,7 @@ module OmniSocials
                  hashtag_platforms: nil, pinterest: nil, youtube: nil,
                  instagram: nil, facebook: nil, linkedin: nil,
                  linkedin_page: nil, tiktok: nil, x: nil, bluesky: nil,
-                 mastodon: nil, google_business: nil)
+                 mastodon: nil, google_business: nil, linkedin_poll: nil)
         body = create_body(
           content: content, channels: channels, scheduled_at: scheduled_at,
           media_ids: media_ids, media_urls: media_urls, type: type,
@@ -86,7 +86,7 @@ module OmniSocials
           youtube: youtube, instagram: instagram, facebook: facebook,
           linkedin: linkedin, linkedin_page: linkedin_page, tiktok: tiktok,
           x: x, bluesky: bluesky, mastodon: mastodon,
-          google_business: google_business
+          google_business: google_business, linkedin_poll: linkedin_poll
         )
         @client.request("POST", "/posts/create", json: body)
       end
@@ -104,7 +104,7 @@ module OmniSocials
                              pinterest: nil, youtube: nil, instagram: nil,
                              facebook: nil, linkedin: nil, linkedin_page: nil,
                              tiktok: nil, x: nil, bluesky: nil, mastodon: nil,
-                             google_business: nil)
+                             google_business: nil, linkedin_poll: nil)
         body = create_body(
           content: content, channels: channels, scheduled_at: nil,
           media_ids: media_ids, media_urls: media_urls, type: type,
@@ -117,7 +117,7 @@ module OmniSocials
           youtube: youtube, instagram: instagram, facebook: facebook,
           linkedin: linkedin, linkedin_page: linkedin_page, tiktok: tiktok,
           x: x, bluesky: bluesky, mastodon: mastodon,
-          google_business: google_business
+          google_business: google_business, linkedin_poll: linkedin_poll
         )
         @client.request("POST", "/posts/create-and-publish", json: body)
       end
@@ -136,7 +136,7 @@ module OmniSocials
                  collaborators: nil, user_tags: nil, pinterest: nil,
                  youtube: nil, instagram: nil, facebook: nil, linkedin: nil,
                  linkedin_page: nil, tiktok: nil, x: nil, bluesky: nil,
-                 mastodon: nil, google_business: nil)
+                 mastodon: nil, google_business: nil, linkedin_poll: nil)
         body = Internal.drop_nil(
           {
             "content" => content,
@@ -158,7 +158,8 @@ module OmniSocials
             "x" => x,
             "bluesky" => bluesky,
             "mastodon" => mastodon,
-            "google_business" => google_business
+            "google_business" => google_business,
+            "linkedin_poll" => linkedin_poll
           }
         )
         @client.request("PATCH", "/posts/#{post_id}", json: body)
@@ -196,7 +197,7 @@ module OmniSocials
                       hashtag_set_id:, hashtag_placement:, hashtag_platforms:,
                       pinterest:, youtube:, instagram:, facebook:, linkedin:,
                       linkedin_page:, tiktok:, x:, bluesky:, mastodon:,
-                      google_business:)
+                      google_business:, linkedin_poll:)
         Internal.drop_nil(
           {
             "content" => content,
@@ -227,7 +228,8 @@ module OmniSocials
             "x" => x,
             "bluesky" => bluesky,
             "mastodon" => mastodon,
-            "google_business" => google_business
+            "google_business" => google_business,
+            "linkedin_poll" => linkedin_poll
           }
         )
       end

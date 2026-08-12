@@ -53,7 +53,7 @@ end
 # ---------------------------------------------------------------------------
 
 PLATFORM_KEYS = %i[pinterest youtube instagram facebook linkedin linkedin_page
-                   tiktok x bluesky mastodon google_business].freeze
+                   tiktok x bluesky mastodon google_business linkedin_poll].freeze
 CREATE_KEYS = (%i[channels scheduled_at media_ids media_urls type source
                   link_url link_title link_description link_thumbnail_url
                   location_id collaborators user_tags hashtag_set
