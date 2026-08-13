@@ -23,9 +23,10 @@ module OmniSocials
       # GET /inbox/conversations - list conversations, newest activity first.
       #
       # All filters are optional: platform ("instagram", "facebook",
-      # "linkedin", "x"), type ("dm", "comment", "mention"), unread (only
-      # conversations with unread messages), limit (1-100), and cursor (an
-      # opaque cursor from a previous response's pagination["next_cursor"]).
+      # "linkedin", "tiktok", "x"), type ("dm", "comment", "mention"),
+      # unread (only conversations with unread messages), limit (1-100), and
+      # cursor (an opaque cursor from a previous response's
+      # pagination["next_cursor"]).
       def list_conversations(platform: nil, type: nil, unread: nil, limit: nil, cursor: nil)
         @client.request(
           "GET", "/inbox/conversations",

@@ -350,7 +350,7 @@ client.inbox.mark_read(conversation_id)
 client.inbox.reply(conversation_id, text: "Thanks for reaching out!")
 ```
 
-`platform` accepts `"instagram"`, `"facebook"`, `"linkedin"`, or `"x"`; `type` accepts `"dm"`, `"comment"`, or `"mention"`. Conversation ids are URL-encoded for you, so pass them exactly as returned - LinkedIn ids contain `":"` and `"()"` (e.g. `"linkedin_comment_urn:li:activity:123"`).
+`platform` accepts `"instagram"`, `"facebook"`, `"linkedin"`, `"tiktok"`, or `"x"`; `type` accepts `"dm"`, `"comment"`, or `"mention"`. TikTok replies are comments only and capped at 150 characters. Conversation ids are URL-encoded for you, so pass them exactly as returned - LinkedIn ids contain `":"` and `"()"` (e.g. `"linkedin_comment_urn:li:activity:123"`).
 
 Replying to an X DM costs 2 prepaid credits, debited from the company balance before the send and automatically refunded if the send fails:
 
