@@ -18,7 +18,9 @@ module OmniSocials
         @client = client
       end
 
-      # GET /posts - list posts (status: draft, scheduled, posted, failed).
+      # GET /posts - list posts (status: draft, in_approval, scheduled, posting,
+      # posted, failed, warning; in_approval = waiting for a reviewer in an
+      # approval workflow).
       def list(status: nil, limit: nil, offset: nil)
         @client.request(
           "GET", "/posts",
