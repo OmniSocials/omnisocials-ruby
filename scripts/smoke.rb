@@ -53,7 +53,8 @@ end
 # ---------------------------------------------------------------------------
 
 PLATFORM_KEYS = %i[pinterest youtube instagram facebook linkedin linkedin_page
-                   tiktok x bluesky mastodon google_business linkedin_poll].freeze
+                   tiktok x bluesky mastodon threads google_business
+                   linkedin_poll].freeze
 CREATE_KEYS = (%i[channels scheduled_at media_ids media_urls type source
                   link_url link_title link_description link_thumbnail_url
                   location_id collaborators user_tags hashtag_set
@@ -266,6 +267,12 @@ def check_body_building
     "posts.create drops top-level nils but keeps nested nil thread_parts"
   )
   ok(fake.last.path == "/posts/create", "posts.create posts to /posts/create")
+
+  posts.update("p1", threads: { "thread_parts" => nil })
+  ok(
+    fake.last.json == { "threads" => { "thread_parts" => nil } },
+    "posts.update keeps nested nil threads.thread_parts (clears a Threads chain)"
+  )
 
   posts.create_and_publish(content: "now", channels: %w[x])
   ok(

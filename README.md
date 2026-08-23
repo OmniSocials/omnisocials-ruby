@@ -103,9 +103,9 @@ post = client.posts.create(
 
 Note that `linkedin` targets a personal LinkedIn profile and `linkedin_page` targets a LinkedIn company page. Both can be connected to the same workspace and posted to independently.
 
-### X thread example
+### Chained threads (X, Bluesky, Mastodon, Threads)
 
-Pass 2 to 25 `thread_parts` to publish a chained thread instead of a single tweet (each part is at most 280 characters). Bluesky and Mastodon support the same `thread_parts` shape:
+Pass 2 to 25 `thread_parts` to publish a chained thread instead of a single tweet (each part is at most 280 characters). Bluesky, Mastodon and Threads support the same `thread_parts` shape (Threads: 2 to 25 parts, 500 characters per part, up to 10 media per part; parts after the first publish as replies to the previous part, and the Threads caption is taken from part 1):
 
 ```ruby
 post = client.posts.create(
@@ -123,7 +123,22 @@ post = client.posts.create(
 )
 ```
 
-On update, passing `x: { "thread_parts" => nil }` clears the thread and reverts the post to single-tweet mode. Only top-level `nil` values are dropped from request bodies, so nested `nil` values like this one are sent as JSON `null`.
+```ruby
+# Meta Threads chain with a carousel on the first part
+post = client.posts.create(
+  content: "Behind the scenes of our summer shoot",
+  channels: ["threads"],
+  threads: {
+    "thread_parts" => [
+      { "text" => "Behind the scenes of our summer shoot. A few highlights:", "media_urls" => ["https://example.com/shoot-1.jpg", "https://example.com/shoot-2.jpg"] },
+      { "text" => "Day one: scouting locations at sunrise." },
+      { "text" => "Day two: the full crew, 14 hours, zero regrets." }
+    ]
+  }
+)
+```
+
+On update, passing `x: { "thread_parts" => nil }` clears the thread and reverts the post to single-tweet mode (same for `bluesky`, `mastodon` and `threads`). Only top-level `nil` values are dropped from request bodies, so nested `nil` values like this one are sent as JSON `null`.
 
 ### X link posts use credits
 

@@ -11,8 +11,8 @@ module OmniSocials
     # for media_urls, `{ "id" => "...", "alt" => "..." }` for media_ids. Alt
     # text is delivered to Mastodon (media description), Bluesky (embed alt),
     # X (photos/GIFs), Pinterest (pin alt text), Instagram (images), and
-    # LinkedIn (images); the same entry shape works inside x/bluesky/mastodon
-    # `thread_parts` media.
+    # LinkedIn (images); the same entry shape works inside
+    # x/bluesky/mastodon/threads `thread_parts` media.
     class Posts
       def initialize(client)
         @client = client
@@ -75,7 +75,8 @@ module OmniSocials
                  hashtag_platforms: nil, pinterest: nil, youtube: nil,
                  instagram: nil, facebook: nil, linkedin: nil,
                  linkedin_page: nil, tiktok: nil, x: nil, bluesky: nil,
-                 mastodon: nil, google_business: nil, linkedin_poll: nil)
+                 mastodon: nil, threads: nil, google_business: nil,
+                 linkedin_poll: nil)
         body = create_body(
           content: content, channels: channels, scheduled_at: scheduled_at,
           media_ids: media_ids, media_urls: media_urls, type: type,
@@ -87,7 +88,7 @@ module OmniSocials
           hashtag_platforms: hashtag_platforms, pinterest: pinterest,
           youtube: youtube, instagram: instagram, facebook: facebook,
           linkedin: linkedin, linkedin_page: linkedin_page, tiktok: tiktok,
-          x: x, bluesky: bluesky, mastodon: mastodon,
+          x: x, bluesky: bluesky, mastodon: mastodon, threads: threads,
           google_business: google_business, linkedin_poll: linkedin_poll
         )
         @client.request("POST", "/posts/create", json: body)
@@ -106,7 +107,8 @@ module OmniSocials
                              pinterest: nil, youtube: nil, instagram: nil,
                              facebook: nil, linkedin: nil, linkedin_page: nil,
                              tiktok: nil, x: nil, bluesky: nil, mastodon: nil,
-                             google_business: nil, linkedin_poll: nil)
+                             threads: nil, google_business: nil,
+                             linkedin_poll: nil)
         body = create_body(
           content: content, channels: channels, scheduled_at: nil,
           media_ids: media_ids, media_urls: media_urls, type: type,
@@ -118,7 +120,7 @@ module OmniSocials
           hashtag_platforms: hashtag_platforms, pinterest: pinterest,
           youtube: youtube, instagram: instagram, facebook: facebook,
           linkedin: linkedin, linkedin_page: linkedin_page, tiktok: tiktok,
-          x: x, bluesky: bluesky, mastodon: mastodon,
+          x: x, bluesky: bluesky, mastodon: mastodon, threads: threads,
           google_business: google_business, linkedin_poll: linkedin_poll
         )
         @client.request("POST", "/posts/create-and-publish", json: body)
@@ -128,8 +130,8 @@ module OmniSocials
       #
       # Only top-level nils are dropped from the body, so passing e.g.
       # x: { "thread_parts" => nil } still clears an X thread (reverts the
-      # post to single-tweet mode). The same applies to bluesky and mastodon
-      # thread parts.
+      # post to single-tweet mode). The same applies to bluesky, mastodon
+      # and threads thread parts.
       #
       # See #create for the 402 "x_credits_insufficient" credit gate that
       # can also refuse an update to a scheduled X link post.
@@ -138,7 +140,8 @@ module OmniSocials
                  collaborators: nil, user_tags: nil, pinterest: nil,
                  youtube: nil, instagram: nil, facebook: nil, linkedin: nil,
                  linkedin_page: nil, tiktok: nil, x: nil, bluesky: nil,
-                 mastodon: nil, google_business: nil, linkedin_poll: nil)
+                 mastodon: nil, threads: nil, google_business: nil,
+                 linkedin_poll: nil)
         body = Internal.drop_nil(
           {
             "content" => content,
@@ -160,6 +163,7 @@ module OmniSocials
             "x" => x,
             "bluesky" => bluesky,
             "mastodon" => mastodon,
+            "threads" => threads,
             "google_business" => google_business,
             "linkedin_poll" => linkedin_poll
           }
@@ -199,7 +203,7 @@ module OmniSocials
                       hashtag_set_id:, hashtag_placement:, hashtag_platforms:,
                       pinterest:, youtube:, instagram:, facebook:, linkedin:,
                       linkedin_page:, tiktok:, x:, bluesky:, mastodon:,
-                      google_business:, linkedin_poll:)
+                      threads:, google_business:, linkedin_poll:)
         Internal.drop_nil(
           {
             "content" => content,
@@ -230,6 +234,7 @@ module OmniSocials
             "x" => x,
             "bluesky" => bluesky,
             "mastodon" => mastodon,
+            "threads" => threads,
             "google_business" => google_business,
             "linkedin_poll" => linkedin_poll
           }
