@@ -23,10 +23,18 @@ module OmniSocials
       # GET /inbox/conversations - list conversations, newest activity first.
       #
       # All filters are optional: platform ("instagram", "facebook",
-      # "linkedin", "tiktok", "youtube", "x"), type ("dm", "comment",
-      # "mention"), unread (only conversations with unread messages),
-      # limit (1-100), and cursor (an opaque cursor from a previous
-      # response's pagination["next_cursor"]).
+      # "linkedin", "tiktok", "youtube", "x", "threads"), type ("dm", "comment",
+      # "mention"), unread (only conversations with unread messages), limit
+      # (1-100), and cursor (an opaque cursor from a previous response's
+      # pagination["next_cursor"]).
+      #
+      # Threads conversations are type "comment" (replies people leave on the
+      # user's Threads posts; conversation ids look like
+      # "threads_comment_<rootPostId>") and "mention"
+      # ("threads_mention_<postId>"); there are no Threads DMs. Threads inbox
+      # is currently rolling out: until Meta approves the permissions it is
+      # disabled on production and calls return a clear error, and it needs a
+      # Threads connection with the reply permission.
       def list_conversations(platform: nil, type: nil, unread: nil, limit: nil, cursor: nil)
         @client.request(
           "GET", "/inbox/conversations",
@@ -62,6 +70,12 @@ module OmniSocials
       # URL with `attachment_url` plus `attachment_type` ("image", "video",
       # "audio", or "file"). Returns the created outgoing message.
       #
+      # On a Threads conversation the reply publishes as a native Threads
+      # reply. Threads inbox is currently rolling out (disabled on production
+      # until Meta App Review) and needs a Threads connection with the reply
+      # permission: a 401 with code "reauth_required" means the connection
+      # lacks that permission (reconnect Threads).
+      #
       # Replying to an X DM costs 2 prepaid credits, debited from the
       # company balance before the send and automatically refunded if the
       # send fails. Two 402 error codes are specific to this call:
@@ -84,11 +98,31 @@ module OmniSocials
         )
       end
 
+      # POST /inbox/messages/{id}/hide - hide or unhide a reply someone left
+      # on one of the user's Threads posts, as the post owner (Threads only
+      # for now). Pass hide: false to unhide. Only incoming top-level replies
+      # can be hidden (Threads does not allow hiding nested replies); the
+      # message keeps its place in the conversation. Returns the updated
+      # message with its "hidden" flag flipped.
+      #
+      # Errors: 400 "unsupported_platform" (not an incoming Threads reply, or
+      # Threads inbox not available yet), 400 "not_hideable" (nested reply or
+      # Threads refused), 401 "reauth_required" (connection lacks the reply
+      # permission; reconnect Threads), 404 "not_found" (message not in this
+      # workspace) or "account_not_connected" (no Threads account).
+      def hide(message_id, hide: true)
+        @client.request(
+          "POST", "/inbox/messages/#{encode_id(message_id)}/hide",
+          json: { "hide" => hide }
+        )
+      end
+
       private
 
-      # URL-encode a conversation id for use in a path segment. LinkedIn ids
-      # contain ":" and "()", so they must be escaped; spaces become %20
-      # (a path segment treats "+" literally, unlike a query string).
+      # URL-encode a conversation or message id for use in a path segment.
+      # LinkedIn conversation ids contain ":" and "()", so they must be
+      # escaped; spaces become %20 (a path segment treats "+" literally,
+      # unlike a query string).
       def encode_id(conversation_id)
         CGI.escape(conversation_id.to_s).gsub("+", "%20")
       end

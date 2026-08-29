@@ -67,6 +67,18 @@ module OmniSocials
       # company's total reserved credits past its balance. Drafts are never
       # gated, and posts scheduled to publish before 2026-08-14 are never
       # gated either.
+      #
+      # Threads posts can carry a location tag: pass
+      # threads: { "location_id" => "..." } (an id from locations.search with
+      # platform: "threads"), or threads: { "location" => { "id" => "...",
+      # "name" => "..." } } to store display fields along with the id
+      # (location_id wins when both are given). On a multi-post thread
+      # (thread_parts) the tag is applied to part 1, and the Post's "threads"
+      # block echoes a "location" object when set. Threads location tagging
+      # is currently rolling out: until Meta approves the permissions it is
+      # disabled on production and create/update/publish return a 400 (also a
+      # 400 validation_error asking you to reconnect Threads when the
+      # connection lacks the threads_location_tagging permission).
       def create(content:, channels: nil, scheduled_at: nil, media_ids: nil,
                  media_urls: nil, type: nil, source: nil, link_url: nil,
                  link_title: nil, link_description: nil, link_thumbnail_url: nil,
@@ -131,7 +143,8 @@ module OmniSocials
       # Only top-level nils are dropped from the body, so passing e.g.
       # x: { "thread_parts" => nil } still clears an X thread (reverts the
       # post to single-tweet mode). The same applies to bluesky, mastodon
-      # and threads thread parts.
+      # and threads thread parts, and to a Threads location tag:
+      # threads: { "location_id" => nil } (or "location" => nil) clears it.
       #
       # See #create for the 402 "x_credits_insufficient" credit gate that
       # can also refuse an update to a scheduled X link post.

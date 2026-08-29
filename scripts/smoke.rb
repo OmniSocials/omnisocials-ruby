@@ -116,7 +116,7 @@ EXPECTED_SURFACE = {
     best_times: [[:keyreq, :platform], [:key, :timezone]]
   },
   locations: {
-    search: [[:req, :q]],
+    search: [[:opt, :q]] + kw(%i[platform latitude longitude]),
     validate: [[:req, :id]]
   },
   webhooks: {

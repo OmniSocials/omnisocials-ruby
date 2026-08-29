@@ -140,6 +140,8 @@ post = client.posts.create(
 
 On update, passing `x: { "thread_parts" => nil }` clears the thread and reverts the post to single-tweet mode (same for `bluesky`, `mastodon` and `threads`). Only top-level `nil` values are dropped from request bodies, so nested `nil` values like this one are sent as JSON `null`.
 
+Threads posts can also carry a location tag: pass `threads: { "location_id" => "..." }` with an id from `client.locations.search(platform: "threads")` (see Locations below). On a multi-post thread the tag is applied to part 1, and on update `threads: { "location_id" => nil }` clears it. Threads location tagging is currently rolling out; until Meta approves the permissions it is disabled on production and calls return a clear error.
+
 ### X link posts use credits
 
 X bills API posts whose text contains a URL at a premium, and OmniSocials passes that fee through as prepaid credits (20 credits per URL-containing tweet; threads billed per part with a link). When a create targets X and the text contains a URL, the response Hash includes a top-level `"warnings"` array (a sibling of `"data"`):
@@ -330,7 +332,7 @@ best = client.analytics.best_times(platform: "instagram", timezone: "Europe/Amst
 best["data"]["best_times"].each { |slot| puts slot }
 ```
 
-## Locations (Instagram place tagging)
+## Locations (Instagram and Threads place tagging)
 
 ```ruby
 results = client.locations.search("Blue Bottle Coffee Oakland")
@@ -344,6 +346,23 @@ client.posts.create(
   location_id: location_id
 )
 ```
+
+Threads uses its own location ids (a Facebook Place ID is not a Threads location id). Pass `platform: "threads"` and search by keyword, or by `latitude` plus `longitude` instead of `q`; use a result's `id` as `threads.location_id` on a post:
+
+```ruby
+results = client.locations.search("Blue Bottle Coffee Oakland", platform: "threads")
+# or around a point instead of a keyword:
+results = client.locations.search(platform: "threads", latitude: 37.8044, longitude: -122.2712)
+threads_location_id = results["locations"][0]["id"]
+
+client.posts.create(
+  content: "Great coffee here",
+  channels: ["threads"],
+  threads: { "location_id" => threads_location_id }
+)
+```
+
+The Threads response is `{ "locations" => [...] }` (each with nullable `name`, `address`, `city`, `country`, `latitude`, `longitude`) or `{ "error" => { "code", "message" } }` with `code` one of `not_available`, `threads_not_connected`, `threads_reauth_required` (reconnect Threads), or `platform_error`. Threads location tagging is currently rolling out; until Meta approves the permissions it is disabled on production and calls return a clear error.
 
 ## Inbox
 
@@ -363,9 +382,14 @@ end
 
 client.inbox.mark_read(conversation_id)
 client.inbox.reply(conversation_id, text: "Thanks for reaching out!")
+
+# Threads only: hide or unhide a reply someone left on one of your Threads posts.
+message_id = messages["data"][0]["id"]
+client.inbox.hide(message_id)               # hide
+client.inbox.hide(message_id, hide: false)  # unhide
 ```
 
-`platform` accepts `"instagram"`, `"facebook"`, `"linkedin"`, `"tiktok"`, `"youtube"`, or `"x"`; `type` accepts `"dm"`, `"comment"`, or `"mention"`. TikTok and YouTube replies are comments only; TikTok replies are capped at 150 characters. Conversation ids are URL-encoded for you, so pass them exactly as returned - LinkedIn ids contain `":"` and `"()"` (e.g. `"linkedin_comment_urn:li:activity:123"`).
+`platform` accepts `"instagram"`, `"facebook"`, `"linkedin"`, `"tiktok"`, `"youtube"`, `"x"`, or `"threads"`; `type` accepts `"dm"`, `"comment"`, or `"mention"`. Threads conversations are comments (replies people leave on your Threads posts) and mentions; there are no Threads DMs. Only incoming top-level Threads replies can be hidden (nested replies cannot), and a hidden message keeps its place in the conversation with its `hidden` flag set. Threads inbox is currently rolling out; until Meta approves the permissions it is disabled on production and calls return a clear error, and it needs a Threads connection with the reply permission (a 401 `reauth_required` means reconnect Threads). TikTok and YouTube replies are comments only; TikTok replies are capped at 150 characters. Conversation ids are URL-encoded for you, so pass them exactly as returned - LinkedIn ids contain `":"` and `"()"` (e.g. `"linkedin_comment_urn:li:activity:123"`).
 
 Replying to an X DM costs 2 prepaid credits, debited from the company balance before the send and automatically refunded if the send fails:
 
