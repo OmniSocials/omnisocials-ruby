@@ -66,9 +66,11 @@ module OmniSocials
       # POST /inbox/conversations/{id}/reply - send a reply into the
       # conversation (a DM message, or a reply to the comment/mention).
       #
-      # `text` is required. Optionally attach a single media asset by public
-      # URL with `attachment_url` plus `attachment_type` ("image", "video",
-      # "audio", or "file"). Returns the created outgoing message.
+      # On Facebook and Instagram DMs, optionally attach a single media asset
+      # by public URL with `attachment_url` plus `attachment_type` ("image",
+      # "video", "audio", or "file"); `text` is optional when `attachment_url`
+      # is set (an attachment-only reply is allowed). Other platforms are
+      # text-only. Returns the created outgoing message.
       #
       # On a Threads conversation the reply publishes as a native Threads
       # reply. Threads inbox is currently rolling out (disabled on production
@@ -84,7 +86,7 @@ module OmniSocials
       # auto-suspended after the balance hit zero (top up and re-enable it
       # in the dashboard to resume; DMs that arrived while suspended are
       # not recovered).
-      def reply(conversation_id, text:, attachment_url: nil, attachment_type: nil)
+      def reply(conversation_id, text: nil, attachment_url: nil, attachment_type: nil)
         body = Internal.drop_nil(
           {
             "text" => text,

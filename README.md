@@ -199,6 +199,15 @@ recent = client.posts.recent_platform(limit: 10, platforms: ["instagram", "tikto
 
 `retry` re-publishes only the platforms that failed, on the same post; platforms that already succeeded are never posted again. It is asynchronous: a 200 means the retry is queued, so poll `get` for the outcome. Max 3 retries per platform.
 
+### Approve or reject a post
+
+```ruby
+client.posts.approve("123")                                    # approve the current approval-workflow step
+client.posts.reject("123", comment: "Wrong CTA link, please fix.") # reject and stop the workflow (comment optional)
+```
+
+Only works on a post with `approval_status: "pending"` (`status: "in_approval"`). Both act on behalf of the user who owns the API key, who must be a listed approver for the workflow's CURRENT step — steps approve in order, so being an approver on a later step is not enough yet (raises a 403 `OmniSocials::PermissionDeniedError`). Approving the last step finalizes the post (`scheduled` or `posting`); rejecting stops the whole workflow immediately, not just the current step.
+
 ## Media
 
 ### Upload from a URL (recommended, up to 1GB)
