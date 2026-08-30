@@ -105,7 +105,7 @@ Note that `linkedin` targets a personal LinkedIn profile and `linkedin_page` tar
 
 ### Chained threads (X, Bluesky, Mastodon, Threads)
 
-Pass 2 to 25 `thread_parts` to publish a chained thread instead of a single tweet (each part is at most 280 characters). Bluesky, Mastodon and Threads support the same `thread_parts` shape (Threads: 2 to 25 parts, 500 characters per part, up to 10 media per part; parts after the first publish as replies to the previous part, and the Threads caption is taken from part 1):
+Pass 2 to 25 `thread_parts` to publish a chained thread instead of a single tweet (each part is at most 280 characters, 25,000 for X Premium/Premium+ accounts). Bluesky, Mastodon and Threads support the same `thread_parts` shape (Threads: 2 to 25 parts, 500 characters per part, up to 10 media per part; parts after the first publish as replies to the previous part, and the Threads caption is taken from part 1):
 
 ```ruby
 post = client.posts.create(
