@@ -392,13 +392,29 @@ end
 client.inbox.mark_read(conversation_id)
 client.inbox.reply(conversation_id, text: "Thanks for reaching out!")
 
-# Threads only: hide or unhide a reply someone left on one of your Threads posts.
+# Hide or unhide a comment someone left on one of your posts (Facebook,
+# Instagram, TikTok, YouTube, Threads). Delete removes it outright (Facebook,
+# Instagram, TikTok; YouTube: hide instead), replies under it included.
 message_id = messages["data"][0]["id"]
 client.inbox.hide(message_id)               # hide
 client.inbox.hide(message_id, hide: false)  # unhide
+client.inbox.delete_message(message_id)
 ```
 
-`platform` accepts `"instagram"`, `"facebook"`, `"linkedin"`, `"tiktok"`, `"youtube"`, `"x"`, or `"threads"`; `type` accepts `"dm"`, `"comment"`, or `"mention"`. Threads conversations are comments (replies people leave on your Threads posts) and mentions; there are no Threads DMs. Only incoming top-level Threads replies can be hidden (nested replies cannot), and a hidden message keeps its place in the conversation with its `hidden` flag set. Threads inbox is currently rolling out; until Meta approves the permissions it is disabled on production and calls return a clear error, and it needs a Threads connection with the reply permission (a 401 `reauth_required` means reconnect Threads). TikTok and YouTube replies are comments only; TikTok replies are capped at 150 characters. Conversation ids are URL-encoded for you, so pass them exactly as returned - LinkedIn ids contain `":"` and `"()"` (e.g. `"linkedin_comment_urn:li:activity:123"`).
+`platform` accepts `"instagram"`, `"facebook"`, `"linkedin"`, `"tiktok"`, `"youtube"`, `"x"`, or `"threads"`; `type` accepts `"dm"`, `"comment"`, or `"mention"`. Threads conversations are comments (replies people leave on your Threads posts) and mentions; there are no Threads DMs. Comments can be hidden on Facebook, Instagram, TikTok, YouTube, and Threads (Threads: incoming top-level replies only), and a hidden message keeps its place in the conversation with its `hidden` flag set; `hidden` is `true`/`false` on comments and `nil` on DMs. A comment/mention's `post` carries `url` (public link when the platform provides one) and `media_type` (the platform's own label) next to `id`, `caption`, and `thumbnail`. Threads inbox is currently rolling out; until Meta approves the permissions it is disabled on production and calls return a clear error, and it needs a Threads connection with the reply permission (a 401 `reauth_required` means reconnect Threads). TikTok and YouTube replies are comments only; TikTok replies are capped at 150 characters. Conversation ids are URL-encoded for you, so pass them exactly as returned - LinkedIn ids contain `":"` and `"()"` (e.g. `"linkedin_comment_urn:li:activity:123"`).
+
+`next` hands out the next conversation that still needs a reply (the customer's latest DM with no reply after it, or an unreplied comment/mention that is not hidden), with the whole thread and the post it belongs to, so a reply can be drafted from one call. Replies typed in the native apps count as answers. Only unread items are served by default, so `mark_read` is the durable way to skip one; `exclude` skips conversation ids for the current session only. Pass `include_next: true` to `reply` to get the following item in the same response. `list_conversations(unanswered: true)` gives the same set as a plain list.
+
+```ruby
+item = client.inbox.next(platform: "instagram")
+while item["data"]
+  message = item["data"]["message"]
+  puts "#{item["remaining"]} left. #{message["sender"]["username"]}: #{message["text"]}"
+
+  reply = client.inbox.reply(message["conversation_id"], text: "Thanks! DM sent.", include_next: true)
+  item = { "data" => reply["next"], "remaining" => reply["remaining"] || 0 }
+end
+```
 
 Replying to an X DM costs 2 prepaid credits, debited from the company balance before the send and automatically refunded if the send fails:
 
