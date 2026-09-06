@@ -46,6 +46,13 @@ module OmniSocials
       # POST /posts/create - create a post (draft, or scheduled when
       # scheduled_at is set).
       #
+      # approval_workflow_id (a workflow id from client.approval_workflows.list)
+      # routes the post through a saved approval workflow: it is created as
+      # in_approval (approval_status "pending") instead of scheduled, the
+      # approvers are notified, and it publishes at scheduled_at once the last
+      # step approves. Requires scheduled_at; not allowed with publish_now.
+      # Errors: 404 workflow_not_found, 400 validation_error.
+      #
       # hashtag_set (set name, case-insensitive) or hashtag_set_id applies a
       # saved hashtag set once at create time; tags already in a caption are
       # skipped; Instagram's 30-hashtag cap returns error code
@@ -88,7 +95,7 @@ module OmniSocials
                  instagram: nil, facebook: nil, linkedin: nil,
                  linkedin_page: nil, tiktok: nil, x: nil, bluesky: nil,
                  mastodon: nil, threads: nil, google_business: nil,
-                 linkedin_poll: nil)
+                 linkedin_poll: nil, approval_workflow_id: nil)
         body = create_body(
           content: content, channels: channels, scheduled_at: scheduled_at,
           media_ids: media_ids, media_urls: media_urls, type: type,
@@ -101,7 +108,8 @@ module OmniSocials
           youtube: youtube, instagram: instagram, facebook: facebook,
           linkedin: linkedin, linkedin_page: linkedin_page, tiktok: tiktok,
           x: x, bluesky: bluesky, mastodon: mastodon, threads: threads,
-          google_business: google_business, linkedin_poll: linkedin_poll
+          google_business: google_business, linkedin_poll: linkedin_poll,
+          approval_workflow_id: approval_workflow_id
         )
         @client.request("POST", "/posts/create", json: body)
       end
@@ -239,7 +247,8 @@ module OmniSocials
                       hashtag_set_id:, hashtag_placement:, hashtag_platforms:,
                       pinterest:, youtube:, instagram:, facebook:, linkedin:,
                       linkedin_page:, tiktok:, x:, bluesky:, mastodon:,
-                      threads:, google_business:, linkedin_poll:)
+                      threads:, google_business:, linkedin_poll:,
+                      approval_workflow_id: nil)
         Internal.drop_nil(
           {
             "content" => content,
@@ -272,7 +281,8 @@ module OmniSocials
             "mastodon" => mastodon,
             "threads" => threads,
             "google_business" => google_business,
-            "linkedin_poll" => linkedin_poll
+            "linkedin_poll" => linkedin_poll,
+            "approval_workflow_id" => approval_workflow_id
           }
         )
       end
