@@ -192,7 +192,7 @@ module OmniSocials
         @client.request("PATCH", "/posts/#{post_id}", json: body)
       end
 
-      # DELETE /posts/{id} - delete a post. Returns nil (204).
+      # DELETE /posts/{id} - remove a post from OmniSocials (the live post stays on the platform). Returns nil (204).
       def delete(post_id)
         @client.request("DELETE", "/posts/#{post_id}")
       end
