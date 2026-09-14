@@ -37,9 +37,8 @@ module OmniSocials
       # user's Threads posts; conversation ids look like
       # "threads_comment_<rootPostId>") and "mention"
       # ("threads_mention_<postId>"); there are no Threads DMs. Threads inbox
-      # is currently rolling out: until Meta approves the permissions it is
-      # disabled on production and calls return a clear error, and it needs a
-      # Threads connection with the reply permission.
+      # needs a Threads connection with the reply permissions; connections made
+      # before those permissions existed must be reconnected once.
       def list_conversations(platform: nil, type: nil, unread: nil, unanswered: nil, limit: nil, cursor: nil)
         @client.request(
           "GET", "/inbox/conversations",
@@ -79,10 +78,9 @@ module OmniSocials
       # text-only. Returns the created outgoing message.
       #
       # On a Threads conversation the reply publishes as a native Threads
-      # reply. Threads inbox is currently rolling out (disabled on production
-      # until Meta App Review) and needs a Threads connection with the reply
+      # reply. The Threads inbox needs a Threads connection with the reply
       # permission: a 401 with code "reauth_required" means the connection
-      # lacks that permission (reconnect Threads).
+      # lacks that permission (connected before it existed; reconnect Threads).
       #
       # Replying to an X DM costs 2 prepaid credits, debited from the
       # company balance before the send and automatically refunded if the
