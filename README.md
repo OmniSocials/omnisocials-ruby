@@ -403,7 +403,7 @@ client.inbox.delete_message(message_id)
 
 `platform` accepts `"instagram"`, `"facebook"`, `"linkedin"`, `"tiktok"`, `"youtube"`, `"x"`, or `"threads"`; `type` accepts `"dm"`, `"comment"`, or `"mention"`. Threads conversations are comments (replies people leave on your Threads posts) and mentions; there are no Threads DMs. Comments can be hidden on Facebook, Instagram, TikTok, YouTube, and Threads (Threads: incoming top-level replies only), and a hidden message keeps its place in the conversation with its `hidden` flag set; `hidden` is `true`/`false` on comments and `nil` on DMs. A comment/mention's `post` carries `url` (public link when the platform provides one) and `media_type` (the platform's own label) next to `id`, `caption`, and `thumbnail`. Threads inbox is currently rolling out; until Meta approves the permissions it is disabled on production and calls return a clear error, and it needs a Threads connection with the reply permission (a 401 `reauth_required` means reconnect Threads). TikTok and YouTube replies are comments only; TikTok replies are capped at 150 characters. Conversation ids are URL-encoded for you, so pass them exactly as returned - LinkedIn ids contain `":"` and `"()"` (e.g. `"linkedin_comment_urn:li:activity:123"`).
 
-`next` hands out the next conversation that still needs a reply (the customer's latest DM with no reply after it, or an unreplied comment/mention that is not hidden), with the whole thread and the post it belongs to, so a reply can be drafted from one call. Replies typed in the native apps count as answers. Only unread items are served by default, so `mark_read` is the durable way to skip one; `exclude` skips conversation ids for the current session only. Pass `include_next: true` to `reply` to get the following item in the same response. `list_conversations(unanswered: true)` gives the same set as a plain list.
+`next` hands out the next conversation that still needs a reply (the customer's latest DM with no reply after it, or an unreplied comment/mention that is not hidden), with the whole thread and the post it belongs to, so a reply can be drafted from one call. DMs that can still be answered come first, then Instagram/Facebook DMs whose 24-hour window has closed (`reply_window["open"]` is `false`: answer those from the native app or mark them read), then comments and mentions, oldest first. Replies typed in the native apps count as answers. Only unread items are served by default, so `mark_read` is the durable way to skip one; `exclude` skips conversation ids for the current session only. Always pass `message_id: message["id"]` to `reply` on comment threads: every comment on a post shares one conversation, and without it the reply goes under the newest comment on the post. Pass `include_next: true` to `reply` to get the following item in the same response. `list_conversations(unanswered: true)` gives the same set as a plain list.
 
 ```ruby
 item = client.inbox.next(platform: "instagram")
@@ -411,7 +411,20 @@ while item["data"]
   message = item["data"]["message"]
   puts "#{item["remaining"]} left. #{message["sender"]["username"]}: #{message["text"]}"
 
-  reply = client.inbox.reply(message["conversation_id"], text: "Thanks! DM sent.", include_next: true)
+  unless item["data"]["reply_window"]["open"]
+    # An Instagram/Facebook DM past Meta's 24-hour window: reply would raise
+    # 422 outside_messaging_window. Answer it in the app, or skip it.
+    client.inbox.mark_read(message["conversation_id"])
+    item = client.inbox.next(platform: "instagram")
+    next
+  end
+
+  reply = client.inbox.reply(
+    message["conversation_id"],
+    text: "Thanks! DM sent.",
+    message_id: message["id"], # the comment being answered, not the newest one
+    include_next: true
+  )
   item = { "data" => reply["next"], "remaining" => reply["remaining"] || 0 }
 end
 ```
