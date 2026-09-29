@@ -32,13 +32,15 @@ module OmniSocials
       # binary-encoded String, e.g. from File.binread).
       #
       # A PDF is split into image slides and the response carries `slides`
-      # plus a `media_ids` array instead of a single `data` item. For files
+      # plus a `media_ids` array instead of a single `data` item; pass
+      # pdf_mode: "document" to keep it as ONE item of type "document" whose
+      # single id in media_ids expands into every page. For files
       # over 100MB use upload_from_url (up to 1GB) or the create_upload_url
       # presigned flow.
-      def upload(file:, filename: nil, name: nil, folder: nil, folder_id: nil)
+      def upload(file:, filename: nil, name: nil, folder: nil, folder_id: nil, pdf_mode: nil)
         upload_name, data = Internal.coerce_file(file, filename)
         fields = Internal.drop_nil(
-          { "name" => name, "folder" => folder, "folder_id" => folder_id }
+          { "name" => name, "folder" => folder, "folder_id" => folder_id, "pdf_mode" => pdf_mode }
         )
         @client.request(
           "POST", "/media/upload",
@@ -50,14 +52,15 @@ module OmniSocials
       #
       # Files over 100MB are streamed in the background: the response has
       # data["status"] == "processing"; poll get() until it is "ready".
-      def upload_from_url(url:, filename: nil, name: nil, folder: nil, folder_id: nil)
+      def upload_from_url(url:, filename: nil, name: nil, folder: nil, folder_id: nil, pdf_mode: nil)
         body = Internal.drop_nil(
           {
             "url" => url,
             "filename" => filename,
             "name" => name,
             "folder" => folder,
-            "folder_id" => folder_id
+            "folder_id" => folder_id,
+            "pdf_mode" => pdf_mode
           }
         )
         @client.request("POST", "/media/upload-from-url", json: body)
@@ -66,7 +69,7 @@ module OmniSocials
       # POST /media/upload-from-base64 - upload base64-encoded data (without
       # a data URI prefix).
       def upload_from_base64(data:, mime_type:, filename: nil, name: nil,
-                             folder: nil, folder_id: nil)
+                             folder: nil, folder_id: nil, pdf_mode: nil)
         body = Internal.drop_nil(
           {
             "data" => data,
@@ -74,7 +77,8 @@ module OmniSocials
             "filename" => filename,
             "name" => name,
             "folder" => folder,
-            "folder_id" => folder_id
+            "folder_id" => folder_id,
+            "pdf_mode" => pdf_mode
           }
         )
         @client.request("POST", "/media/upload-from-base64", json: body)
