@@ -3,7 +3,7 @@
 module OmniSocials
   module Resources
     # Webhooks resource: manage event subscriptions (post.scheduled,
-    # post.published, post.failed).
+    # post.published, post.failed, post.approved, post.rejected).
     #
     # For verifying incoming deliveries, see OmniSocials::Webhooks.verify.
     class Webhooks
@@ -24,8 +24,9 @@ module OmniSocials
       # POST /webhooks - create a webhook subscription.
       #
       # `url` must be HTTPS. `events` is a non-empty subset of
-      # post.scheduled, post.published, post.failed. The signing `secret` is
-      # only returned once, in this response - store it.
+      # post.scheduled, post.published, post.failed, post.approved,
+      # post.rejected. The signing `secret` is only returned once, in this
+      # response - store it.
       def create(url:, events:)
         @client.request(
           "POST", "/webhooks",

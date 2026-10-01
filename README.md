@@ -208,6 +208,20 @@ client.posts.reject("123", comment: "Wrong CTA link, please fix.") # reject and 
 
 Only works on a post with `approval_status: "pending"` (`status: "in_approval"`). Both act on behalf of the user who owns the API key, who must be a listed approver for the workflow's CURRENT step — steps approve in order, so being an approver on a later step is not enough yet (raises a 403 `OmniSocials::PermissionDeniedError`). Approving the last step finalizes the post (`scheduled` or `posting`); rejecting stops the whole workflow immediately, not just the current step.
 
+### Read the approval review
+
+```ruby
+review = client.posts.get_approval("123")["data"]
+if review["status"] == "rejected" && review["rejection"]
+  puts "Rejected by #{review["rejection"]["by"]["name"]}: #{review["rejection"]["reason"]}"
+end
+review["steps"].each do |step|
+  puts "#{step["order"]} #{step["name"]} #{step["status"]}"
+end
+```
+
+`get_approval` returns the review of a post that went through an approval workflow: `status` (`none`, `pending`, `approved`, `rejected`), the `workflow`, who requested it and when, `current_step` (the step the post waits on, `nil` when the review ended), every step with its approvers and their decisions, the `rejection` (`by`, `reason`, `at`, `step`; `nil` when nobody rejected) and the `comments` thread, oldest first. A post without an approval workflow returns `status: "none"` with empty `steps` and `comments`. Read-only; needs the `posts:read` scope.
+
 ## Media
 
 ### Upload from a URL (recommended, up to 1GB)
@@ -450,7 +464,7 @@ end
 
 ## Webhooks
 
-Subscribe to `post.scheduled`, `post.published`, and `post.failed` events:
+Subscribe to `post.scheduled`, `post.published`, `post.failed`, `post.approved`, and `post.rejected` events. `post.approved` fires when the last step of a post's approval workflow is approved, `post.rejected` when an approver rejects the post (it will not publish). These two carry `data["approval"]` with `status`, `decided_by` (the approver's user id) and `reason` (`nil` on `post.approved`), and an empty `data["targets"]`.
 
 ```ruby
 webhook = client.webhooks.create(
@@ -493,6 +507,8 @@ class OmnisocialsWebhooksController < ApplicationController
       event["data"]["targets"].each do |target|
         Rails.logger.info "#{target["platform"]} #{target["status"]} #{target["native_post_id"]}"
       end
+    elsif event["type"] == "post.rejected"
+      Rails.logger.info "Rejected: #{event["data"]["post_id"]} #{event["data"]["approval"]["reason"]}"
     end
 
     head :ok

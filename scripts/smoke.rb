@@ -73,19 +73,22 @@ EXPECTED_SURFACE = {
     list: kw(%i[status limit offset]),
     get: [[:req, :post_id]],
     recent_platform: kw(%i[limit platforms]),
-    create: [[:keyreq, :content]] + kw(CREATE_KEYS),
+    create: [[:keyreq, :content]] + kw(CREATE_KEYS + [:approval_workflow_id]),
     create_and_publish: [[:keyreq, :content]] + kw(CREATE_AND_PUBLISH_KEYS),
     update: [[:req, :post_id]] + kw(UPDATE_KEYS),
     delete: [[:req, :post_id]],
-    publish: [[:req, :post_id]]
+    publish: [[:req, :post_id]],
+    approve: [[:req, :post_id]],
+    reject: [[:req, :post_id]] + kw(%i[comment]),
+    get_approval: [[:req, :post_id]]
   },
   media: {
     list: kw(%i[limit offset search folder_id]),
     get: [[:req, :media_id]],
-    upload: [[:keyreq, :file]] + kw(%i[filename name folder folder_id]),
-    upload_from_url: [[:keyreq, :url]] + kw(%i[filename name folder folder_id]),
+    upload: [[:keyreq, :file]] + kw(%i[filename name folder folder_id pdf_mode]),
+    upload_from_url: [[:keyreq, :url]] + kw(%i[filename name folder folder_id pdf_mode]),
     upload_from_base64: [%i[keyreq data], %i[keyreq mime_type]] +
-                        kw(%i[filename name folder folder_id]),
+                        kw(%i[filename name folder folder_id pdf_mode]),
     create_upload_url: [],
     check: kw(%i[url media_id size_bytes mime]),
     update: [[:req, :media_id]] + kw(%i[name folder_id]),
@@ -294,6 +297,12 @@ def check_body_building
     "posts.recent_platform joins the platforms array"
   )
 
+  posts.get_approval("42")
+  ok(
+    fake.last.method == "GET" && fake.last.path == "/posts/42/approval",
+    "posts.get_approval GETs /posts/42/approval"
+  )
+
   media = OmniSocials::Resources::Media.new(fake)
   media.update("1001", name: "renamed")
   ok(
@@ -435,6 +444,32 @@ def check_webhook_verification
     payload: raw_body, signature: signature, secret: secret
   )
   ok(parsed == event, "valid signature verifies and returns the parsed event")
+
+  rejected = {
+    "id" => "e7c9a1b2-3d4e-5f6a-7b8c-9d0e1f2a3b4d",
+    "type" => "post.rejected",
+    "created_at" => "2026-10-02T09:00:05.000Z",
+    "data" => {
+      "post_id" => "123456",
+      "workspace_id" => 789,
+      "status" => "rejected",
+      "targets" => [],
+      "approval" => {
+        "status" => "rejected", "decided_by" => "c4a09e1d", "reason" => "Wrong product photo"
+      }
+    }
+  }
+  rejected_body = JSON.generate(rejected)
+  parsed_rejected = OmniSocials::Webhooks.verify(
+    payload: rejected_body,
+    signature: build_signature(secret, timestamp, rejected_body),
+    secret: secret
+  )
+  ok(
+    parsed_rejected["type"] == "post.rejected" &&
+      parsed_rejected["data"]["approval"] == rejected["data"]["approval"],
+    "post.rejected event keeps its approval object"
+  )
 
   tampered = raw_body.sub("posted", "hacked")
   assert_raises(OmniSocials::WebhookVerificationError, "tampered body raises") do

@@ -238,6 +238,22 @@ module OmniSocials
         @client.request("POST", "/posts/#{post_id}/reject", json: body)
       end
 
+      # GET /posts/{id}/approval - the approval review of a post: every step
+      # with its approvers and their decisions, the rejection with its
+      # reason, and the comment thread. Use it when approval_status is
+      # "rejected" to learn who rejected the post and why, or while it is
+      # "pending" to see who the post waits for.
+      #
+      # `data` carries post_id, status ("none", "pending", "approved",
+      # "rejected"), workflow, requested_by, requested_at, current_step,
+      # steps, rejection and comments (oldest first). A post without an
+      # approval workflow returns status "none" with the object fields nil
+      # and empty steps and comments. Read-only; requires the posts:read
+      # scope.
+      def get_approval(post_id)
+        @client.request("GET", "/posts/#{post_id}/approval")
+      end
+
       private
 
       def create_body(content:, channels:, scheduled_at:, media_ids:,
