@@ -157,9 +157,9 @@ module OmniSocials
       # from Facebook" on a reel that is also shared to Facebook, which live
       # on Facebook where Instagram's hide does not reach them; the inbox row
       # is left unchanged, so hide it in the Instagram or Facebook app and do
-      # not retry). Threads inbox is currently rolling out; until Meta
-      # approves the permissions it is disabled on production and Threads
-      # calls return a clear error.
+      # not retry). A Threads account connected before 2026-09-14 needs a
+      # one-time reconnect; until then a Threads hide answers 401
+      # "reauth_required".
       def hide(message_id, hide: true)
         @client.request(
           "POST", "/inbox/messages/#{encode_id(message_id)}/hide",
