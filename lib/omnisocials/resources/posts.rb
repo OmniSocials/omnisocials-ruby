@@ -86,6 +86,16 @@ module OmniSocials
       # disabled on production and create/update/publish return a 400 (also a
       # 400 validation_error asking you to reconnect Threads when the
       # connection lacks the threads_location_tagging permission).
+      #
+      # Pinterest posts can tag products: pass
+      # pinterest: { "board_id" => "...", "product_tags" => [...] } with up
+      # to 24 product Pins of the connected Pinterest account, each as a Pin
+      # id String (see pinterest.list_products) or a Pin link. Products of
+      # other merchants cannot be tagged. The tags are added right after the
+      # Pin is published; a product Pinterest refuses never fails the post,
+      # and the Post's "pinterest" block then carries "product_tags_result"
+      # (requested, tagged, skipped, error). More than 24 entries or an
+      # invalid entry raises a 400 validation_error.
       def create(content:, channels: nil, scheduled_at: nil, media_ids: nil,
                  media_urls: nil, type: nil, source: nil, link_url: nil,
                  link_title: nil, link_description: nil, link_thumbnail_url: nil,
@@ -153,6 +163,9 @@ module OmniSocials
       # post to single-tweet mode). The same applies to bluesky, mastodon
       # and threads thread parts, and to a Threads location tag:
       # threads: { "location_id" => nil } (or "location" => nil) clears it.
+      #
+      # pinterest replaces the stored Pinterest options wholesale, so leave
+      # "product_tags" out (or send []) to remove the product tags.
       #
       # See #create for the 402 "x_credits_insufficient" credit gate that
       # can also refuse an update to a scheduled X link post.

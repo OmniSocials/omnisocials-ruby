@@ -122,6 +122,10 @@ EXPECTED_SURFACE = {
     search: [[:opt, :q]] + kw(%i[platform latitude longitude]),
     validate: [[:req, :id]]
   },
+  pinterest: {
+    list_products: kw(%i[source product_group_id bookmark page_size]),
+    validate_product: [[:req, :id]]
+  },
   webhooks: {
     list: [],
     get: [[:req, :webhook_id]],
@@ -337,6 +341,28 @@ def check_body_building
   ok(fake.last.query == { "ids" => "1,2,3" }, "analytics.posts joins ids into a CSV")
   analytics.posts("4,5")
   ok(fake.last.query == { "ids" => "4,5" }, "analytics.posts passes a CSV string through")
+
+  pinterest = OmniSocials::Resources::Pinterest.new(fake)
+  pinterest.list_products(source: "catalog", product_group_id: "443727193917", page_size: 50)
+  ok(
+    fake.last.method == "GET" && fake.last.path == "/pinterest/products" &&
+      fake.last.query == { "source" => "catalog", "product_group_id" => "443727193917",
+                           "bookmark" => nil, "page_size" => 50 },
+    "pinterest.list_products GETs /pinterest/products with its filters"
+  )
+  pinterest.validate_product("813744226420795884")
+  ok(
+    fake.last.method == "GET" && fake.last.path == "/pinterest/products/validate" &&
+      fake.last.query == { "id" => "813744226420795884" },
+    "pinterest.validate_product GETs /pinterest/products/validate with the id"
+  )
+
+  posts.create(content: "pin", channels: %w[pinterest],
+               pinterest: { "board_id" => "b1", "product_tags" => %w[813744226420795884] })
+  ok(
+    fake.last.json["pinterest"] == { "board_id" => "b1", "product_tags" => %w[813744226420795884] },
+    "posts.create passes pinterest product_tags through"
+  )
 
   webhooks = OmniSocials::Resources::Webhooks.new(fake)
   webhooks.update("w1", is_active: false)
