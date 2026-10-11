@@ -46,6 +46,25 @@ module OmniSocials
       # POST /posts/create - create a post (draft, or scheduled when
       # scheduled_at is set).
       #
+      # draft: true with scheduled_at stores a planned draft: the post is
+      # "draft" and keeps that time, shows on the dashboard calendar at that
+      # slot with a dashed outline, and the scheduler never publishes it. A
+      # person schedules it from the composer, or you do with #update and
+      # draft: false. Use it when an agent proposes a slot that a human
+      # should confirm. Not allowed with publish_now or approval_workflow_id
+      # (400 validation_error). Without scheduled_at it changes nothing.
+      #
+      # media_fit is the image fit per channel for feed images whose ratio is
+      # outside what a channel shows uncropped: a Hash of platform id
+      # ("instagram", "pinterest", ...) to "auto", "crop" or "keep". auto
+      # (default): Instagram crops a tall or wide image to 4:5 / 1.91:1 around
+      # the subject (Instagram cuts it to that window anyway and Meta cannot
+      # boost a feed post outside it); Pinterest keeps a Pin taller than 2:3
+      # and reports it. crop / keep force it per channel. Every decision comes
+      # back in the same "warnings" array with code "image_fit" (action is
+      # "cropped", "kept" or "crop_failed", with platform, media_url, ratio,
+      # target and crop_url).
+      #
       # approval_workflow_id (a workflow id from client.approval_workflows.list)
       # routes the post through a saved approval workflow: it is created as
       # in_approval (approval_status "pending") instead of scheduled, the
@@ -96,6 +115,20 @@ module OmniSocials
       # and the Post's "pinterest" block then carries "product_tags_result"
       # (requested, tagged, skipped, error). More than 24 entries or an
       # invalid entry raises a 400 validation_error.
+      #
+      # comment_dm_automation binds a comment-to-DM automation to the post
+      # (Instagram must be in channels): a keyword in a comment is answered
+      # with a DM, once per person, with an optional public reply under the
+      # comment. Shape: { "trigger" => { "keywords" => ["guide"], "match" =>
+      # "word" }, "actions" => { "dm" => { "text" => "..." }, "public_reply"
+      # => { "enabled" => true, "variations" => [...] } }, "limits" =>
+      # { "max_sends" => 500 } } (see automations.create for the fields).
+      # Needs the automations:write scope on the key (403
+      # insufficient_scope, checked before anything else); a bad Hash is a
+      # 400 validation_error whose message starts with
+      # "comment_dm_automation: ". The response then carries
+      # data["comment_dm_automation"] (the automation, with "post" nil); it
+      # starts listening once the post is live on Instagram.
       def create(content:, channels: nil, scheduled_at: nil, media_ids: nil,
                  media_urls: nil, type: nil, source: nil, link_url: nil,
                  link_title: nil, link_description: nil, link_thumbnail_url: nil,
@@ -105,7 +138,8 @@ module OmniSocials
                  instagram: nil, facebook: nil, linkedin: nil,
                  linkedin_page: nil, tiktok: nil, x: nil, bluesky: nil,
                  mastodon: nil, threads: nil, google_business: nil,
-                 linkedin_poll: nil, approval_workflow_id: nil)
+                 linkedin_poll: nil, approval_workflow_id: nil, draft: nil,
+                 media_fit: nil, comment_dm_automation: nil)
         body = create_body(
           content: content, channels: channels, scheduled_at: scheduled_at,
           media_ids: media_ids, media_urls: media_urls, type: type,
@@ -119,14 +153,17 @@ module OmniSocials
           linkedin: linkedin, linkedin_page: linkedin_page, tiktok: tiktok,
           x: x, bluesky: bluesky, mastodon: mastodon, threads: threads,
           google_business: google_business, linkedin_poll: linkedin_poll,
-          approval_workflow_id: approval_workflow_id
+          approval_workflow_id: approval_workflow_id, draft: draft,
+          media_fit: media_fit, comment_dm_automation: comment_dm_automation
         )
         @client.request("POST", "/posts/create", json: body)
       end
 
       # POST /posts/create-and-publish - create and publish immediately.
-      # See #create for the "warnings" array and the 402
-      # "x_credits_insufficient" credit gate on X link posts.
+      # See #create for the "warnings" array (X link posts, and the
+      # "image_fit" entries steered by media_fit), the 402
+      # "x_credits_insufficient" credit gate on X link posts and
+      # comment_dm_automation.
       def create_and_publish(content:, channels: nil, media_ids: nil,
                              media_urls: nil, type: nil, source: nil,
                              link_url: nil, link_title: nil, link_description: nil,
@@ -138,7 +175,8 @@ module OmniSocials
                              facebook: nil, linkedin: nil, linkedin_page: nil,
                              tiktok: nil, x: nil, bluesky: nil, mastodon: nil,
                              threads: nil, google_business: nil,
-                             linkedin_poll: nil)
+                             linkedin_poll: nil, media_fit: nil,
+                             comment_dm_automation: nil)
         body = create_body(
           content: content, channels: channels, scheduled_at: nil,
           media_ids: media_ids, media_urls: media_urls, type: type,
@@ -151,12 +189,27 @@ module OmniSocials
           youtube: youtube, instagram: instagram, facebook: facebook,
           linkedin: linkedin, linkedin_page: linkedin_page, tiktok: tiktok,
           x: x, bluesky: bluesky, mastodon: mastodon, threads: threads,
-          google_business: google_business, linkedin_poll: linkedin_poll
+          google_business: google_business, linkedin_poll: linkedin_poll,
+          media_fit: media_fit, comment_dm_automation: comment_dm_automation
         )
         @client.request("POST", "/posts/create-and-publish", json: body)
       end
 
       # PATCH /posts/{id} - update a draft or scheduled post.
+      #
+      # draft: false without scheduled_at schedules a planned draft at the
+      # scheduled_at it already carries (400 validation_error when it has
+      # none or it is in the past). draft: true without scheduled_at
+      # unschedules a scheduled post: it keeps its time and stays on the
+      # calendar as a dashed draft, nothing publishes; a post waiting for
+      # approval leaves its workflow. draft: true with scheduled_at moves the
+      # time and keeps (or makes) the post a draft.
+      #
+      # media_fit (same shape as on #create) alone re-decides the stored
+      # images: "keep" gives the original back, "crop" crops an image that
+      # was kept. Like #create, the response can carry a top-level "warnings"
+      # array with "image_fit" entries when the update changes the images or
+      # media_fit.
       #
       # Only top-level nils are dropped from the body, so passing e.g.
       # x: { "thread_parts" => nil } still clears an X thread (reverts the
@@ -169,13 +222,18 @@ module OmniSocials
       #
       # See #create for the 402 "x_credits_insufficient" credit gate that
       # can also refuse an update to a scheduled X link post.
+      #
+      # comment_dm_automation (same shape as on #create) as a Hash replaces
+      # the post's comment-to-DM automation, an explicit nil removes it, and
+      # leaving it out keeps it. Needs the automations:write scope.
       def update(post_id, content: nil, scheduled_at: nil, channels: nil,
                  media_ids: nil, media_urls: nil, type: nil, location_id: nil,
                  collaborators: nil, user_tags: nil, pinterest: nil,
                  youtube: nil, instagram: nil, facebook: nil, linkedin: nil,
                  linkedin_page: nil, tiktok: nil, x: nil, bluesky: nil,
                  mastodon: nil, threads: nil, google_business: nil,
-                 linkedin_poll: nil)
+                 linkedin_poll: nil, draft: nil, media_fit: nil,
+                 comment_dm_automation: OmniSocials::NOT_GIVEN)
         body = Internal.drop_nil(
           {
             "content" => content,
@@ -199,9 +257,14 @@ module OmniSocials
             "mastodon" => mastodon,
             "threads" => threads,
             "google_business" => google_business,
-            "linkedin_poll" => linkedin_poll
+            "linkedin_poll" => linkedin_poll,
+            "draft" => draft,
+            "media_fit" => media_fit
           }
         )
+        # An explicit nil removes the post's automation, so it must survive
+        # drop_nil; NOT_GIVEN (the default) leaves it untouched.
+        body["comment_dm_automation"] = comment_dm_automation unless comment_dm_automation.is_a?(NotGiven)
         @client.request("PATCH", "/posts/#{post_id}", json: body)
       end
 
@@ -277,7 +340,8 @@ module OmniSocials
                       pinterest:, youtube:, instagram:, facebook:, linkedin:,
                       linkedin_page:, tiktok:, x:, bluesky:, mastodon:,
                       threads:, google_business:, linkedin_poll:,
-                      approval_workflow_id: nil)
+                      approval_workflow_id: nil, draft: nil, media_fit: nil,
+                      comment_dm_automation: nil)
         Internal.drop_nil(
           {
             "content" => content,
@@ -311,7 +375,10 @@ module OmniSocials
             "threads" => threads,
             "google_business" => google_business,
             "linkedin_poll" => linkedin_poll,
-            "approval_workflow_id" => approval_workflow_id
+            "approval_workflow_id" => approval_workflow_id,
+            "draft" => draft,
+            "media_fit" => media_fit,
+            "comment_dm_automation" => comment_dm_automation
           }
         )
       end

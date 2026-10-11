@@ -73,9 +73,11 @@ EXPECTED_SURFACE = {
     list: kw(%i[status limit offset]),
     get: [[:req, :post_id]],
     recent_platform: kw(%i[limit platforms]),
-    create: [[:keyreq, :content]] + kw(CREATE_KEYS + [:approval_workflow_id]),
-    create_and_publish: [[:keyreq, :content]] + kw(CREATE_AND_PUBLISH_KEYS),
-    update: [[:req, :post_id]] + kw(UPDATE_KEYS),
+    create: [[:keyreq, :content]] +
+            kw(CREATE_KEYS + %i[approval_workflow_id draft media_fit comment_dm_automation]),
+    create_and_publish: [[:keyreq, :content]] +
+                        kw(CREATE_AND_PUBLISH_KEYS + %i[media_fit comment_dm_automation]),
+    update: [[:req, :post_id]] + kw(UPDATE_KEYS + %i[draft media_fit comment_dm_automation]),
     delete: [[:req, :post_id]],
     publish: [[:req, :post_id]],
     approve: [[:req, :post_id]],
@@ -125,6 +127,16 @@ EXPECTED_SURFACE = {
   pinterest: {
     list_products: kw(%i[source product_group_id bookmark page_size]),
     validate_product: [[:req, :id]]
+  },
+  automations: {
+    list: kw(%i[status post_id]),
+    get: [[:req, :automation_id]],
+    create: [[:keyreq, :actions]] +
+            kw(%i[trigger limits name post_id instagram_media_id status]),
+    update: [[:req, :automation_id]] +
+            kw(%i[name post_id instagram_media_id trigger actions limits status]),
+    delete: [[:req, :automation_id]],
+    list_events: [[:req, :automation_id]] + kw(%i[outcome limit offset])
   },
   webhooks: {
     list: [],

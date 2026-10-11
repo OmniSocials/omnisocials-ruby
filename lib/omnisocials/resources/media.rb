@@ -8,7 +8,8 @@ module OmniSocials
         @client = client
       end
 
-      # GET /media - list library files.
+      # GET /media - list library files. Each item carries "width" and
+      # "height" (pixels; nil for videos and older files).
       def list(limit: nil, offset: nil, search: nil, folder_id: nil)
         @client.request(
           "GET", "/media",
@@ -98,6 +99,16 @@ module OmniSocials
       #
       # Provide one of: a public `url`, an existing `media_id`, or
       # `size_bytes` + `mime`.
+      #
+      # The result carries "file" (size_bytes, mime, size_known, width,
+      # height; the pixel size is known for library images, nil otherwise),
+      # "connected_platforms", "compatible", "warnings", "summary" and "fit":
+      # one entry per connected channel with a fit rule for an IMAGE as a
+      # feed post (platform, display_name, fits, ratio, shown = "whole" |
+      # "cut", target, default_action = "crop" | "keep" | nil, message).
+      # fits false = the ratio is outside the window the channel shows
+      # uncropped; default_action is what a post create does unless the
+      # post's media_fit says otherwise. Empty for videos and unknown sizes.
       def check(url: nil, media_id: nil, size_bytes: nil, mime: nil)
         body = Internal.drop_nil(
           {
