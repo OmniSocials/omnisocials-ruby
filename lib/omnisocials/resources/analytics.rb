@@ -40,7 +40,9 @@ module OmniSocials
       end
 
       # GET /analytics/best-times - best times to post for a platform,
-      # derived from the workspace's own engagement history.
+      # derived from the workspace's own engagement history. The response has
+      # no "data" wrapper: "platform", "timezone", "basis", "grid" and
+      # "recommendations" sit at the top level.
       def best_times(platform:, timezone: nil)
         @client.request(
           "GET", "/analytics/best-times",

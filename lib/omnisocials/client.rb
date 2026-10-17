@@ -63,7 +63,7 @@ module OmniSocials
                 :accounts, :analytics, :audio, :locations, :pinterest,
                 :automations, :inbox, :webhooks
 
-    # api_key     - API key (omsk_live_* / omsk_test_*). Falls back to the
+    # api_key     - API key (omsk_live_*). Falls back to the
     #               OMNISOCIALS_API_KEY environment variable. Raises
     #               OmniSocials::AuthenticationError when neither is set.
     # base_url    - API base URL (default https://api.omnisocials.com/v1).

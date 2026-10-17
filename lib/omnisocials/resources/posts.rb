@@ -116,6 +116,19 @@ module OmniSocials
       # (requested, tagged, skipped, error). More than 24 entries or an
       # invalid entry raises a 400 validation_error.
       #
+      # telegram holds the Telegram options (the connected channel or group,
+      # posted by the OmniSocials bot): "silent", "link_preview", "pin",
+      # "protect_content", "spoiler", "caption_above_media" (booleans), up to
+      # 3 "buttons" ({ "text" => ..., "url" => ... }, not on an album or a
+      # poll), a native "poll" ({ "options" => 2 to 12 of up to 100
+      # characters, "open_period" => 5 to 2628000 seconds, "multiple" => true
+      # }; the post text is the question, max 300 characters, no media) and
+      # "first_comment" (a reply under the post). Text up to 4,096
+      # characters; with media, text over 1,024 characters is sent as a reply
+      # under the media. No Stories. On #update every key merges into the
+      # stored options. Once sent, the Post's "telegram" block carries
+      # "result" (message ids and links).
+      #
       # comment_dm_automation binds a comment-to-DM automation to the post
       # (Instagram must be in channels): a keyword in a comment is answered
       # with a DM, once per person, with an optional public reply under the
@@ -138,8 +151,9 @@ module OmniSocials
                  instagram: nil, facebook: nil, linkedin: nil,
                  linkedin_page: nil, tiktok: nil, x: nil, bluesky: nil,
                  mastodon: nil, threads: nil, google_business: nil,
-                 linkedin_poll: nil, approval_workflow_id: nil, draft: nil,
-                 media_fit: nil, comment_dm_automation: nil)
+                 telegram: nil, linkedin_poll: nil,
+                 approval_workflow_id: nil, draft: nil, media_fit: nil,
+                 comment_dm_automation: nil)
         body = create_body(
           content: content, channels: channels, scheduled_at: scheduled_at,
           media_ids: media_ids, media_urls: media_urls, type: type,
@@ -152,7 +166,8 @@ module OmniSocials
           youtube: youtube, instagram: instagram, facebook: facebook,
           linkedin: linkedin, linkedin_page: linkedin_page, tiktok: tiktok,
           x: x, bluesky: bluesky, mastodon: mastodon, threads: threads,
-          google_business: google_business, linkedin_poll: linkedin_poll,
+          google_business: google_business, telegram: telegram,
+          linkedin_poll: linkedin_poll,
           approval_workflow_id: approval_workflow_id, draft: draft,
           media_fit: media_fit, comment_dm_automation: comment_dm_automation
         )
@@ -175,7 +190,7 @@ module OmniSocials
                              facebook: nil, linkedin: nil, linkedin_page: nil,
                              tiktok: nil, x: nil, bluesky: nil, mastodon: nil,
                              threads: nil, google_business: nil,
-                             linkedin_poll: nil, media_fit: nil,
+                             telegram: nil, linkedin_poll: nil, media_fit: nil,
                              comment_dm_automation: nil)
         body = create_body(
           content: content, channels: channels, scheduled_at: nil,
@@ -189,7 +204,8 @@ module OmniSocials
           youtube: youtube, instagram: instagram, facebook: facebook,
           linkedin: linkedin, linkedin_page: linkedin_page, tiktok: tiktok,
           x: x, bluesky: bluesky, mastodon: mastodon, threads: threads,
-          google_business: google_business, linkedin_poll: linkedin_poll,
+          google_business: google_business, telegram: telegram,
+          linkedin_poll: linkedin_poll,
           media_fit: media_fit, comment_dm_automation: comment_dm_automation
         )
         @client.request("POST", "/posts/create-and-publish", json: body)
@@ -232,7 +248,8 @@ module OmniSocials
                  youtube: nil, instagram: nil, facebook: nil, linkedin: nil,
                  linkedin_page: nil, tiktok: nil, x: nil, bluesky: nil,
                  mastodon: nil, threads: nil, google_business: nil,
-                 linkedin_poll: nil, draft: nil, media_fit: nil,
+                 telegram: nil, linkedin_poll: nil, draft: nil,
+                 media_fit: nil,
                  comment_dm_automation: OmniSocials::NOT_GIVEN)
         body = Internal.drop_nil(
           {
@@ -257,6 +274,7 @@ module OmniSocials
             "mastodon" => mastodon,
             "threads" => threads,
             "google_business" => google_business,
+            "telegram" => telegram,
             "linkedin_poll" => linkedin_poll,
             "draft" => draft,
             "media_fit" => media_fit
@@ -340,8 +358,8 @@ module OmniSocials
                       pinterest:, youtube:, instagram:, facebook:, linkedin:,
                       linkedin_page:, tiktok:, x:, bluesky:, mastodon:,
                       threads:, google_business:, linkedin_poll:,
-                      approval_workflow_id: nil, draft: nil, media_fit: nil,
-                      comment_dm_automation: nil)
+                      telegram: nil, approval_workflow_id: nil, draft: nil,
+                      media_fit: nil, comment_dm_automation: nil)
         Internal.drop_nil(
           {
             "content" => content,
@@ -374,6 +392,7 @@ module OmniSocials
             "mastodon" => mastodon,
             "threads" => threads,
             "google_business" => google_business,
+            "telegram" => telegram,
             "linkedin_poll" => linkedin_poll,
             "approval_workflow_id" => approval_workflow_id,
             "draft" => draft,

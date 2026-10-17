@@ -14,7 +14,7 @@ Gem::Specification.new do |spec|
                      "YouTube, TikTok, X, Pinterest, Bluesky, Threads, Mastodon, " \
                      "and Google Business via the OmniSocials Public API. " \
                      "Zero runtime dependencies (Net::HTTP, OpenSSL, JSON)."
-  spec.homepage = "https://omnisocials.com"
+  spec.homepage = "https://omnisocials.com/sdk/ruby"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.0"
 
