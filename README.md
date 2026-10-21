@@ -1,6 +1,6 @@
 # OmniSocials Ruby SDK
 
-The official Ruby SDK for OmniSocials: post, schedule, reply and report on 11 social platforms (Instagram, Facebook, LinkedIn, X, TikTok, YouTube, Threads, Pinterest, Bluesky, Mastodon and Google Business) from one API. Guide: [omnisocials.com/sdk/ruby](https://omnisocials.com/sdk/ruby)
+The official Ruby SDK for OmniSocials: post, schedule, reply and report on 12 social platforms (Instagram, Facebook, LinkedIn, X, TikTok, YouTube, Threads, Pinterest, Bluesky, Mastodon, Google Business and Telegram) from one API. Guide: [omnisocials.com/sdk/ruby](https://omnisocials.com/sdk/ruby)
 
 Full API reference: [https://docs.omnisocials.com](https://docs.omnisocials.com)
 
@@ -67,8 +67,6 @@ post = client.posts.create_and_publish(
 
 ### Planned drafts
 
-> **Not yet released (coming in 0.10.0).** This section describes the next SDK release. The current release is 0.9.0.
-
 Pass `draft: true` with `scheduled_at` to store the post as a draft that keeps its time. It shows on the dashboard calendar at that slot with a dashed outline and the scheduler never publishes it: a person schedules it from the composer, or you do with `update` and `draft: false`. Use it when an agent proposes a slot that a human should confirm. `draft: true` is not allowed with `publish_now` or `approval_workflow_id` (`400 validation_error`). On `update`, `draft: false` without `scheduled_at` is a `400 validation_error` when the draft has no time or its time is in the past (pass a new `scheduled_at` then), and `draft: true` on a scheduled post unschedules it while keeping the time.
 
 ```ruby
@@ -85,8 +83,6 @@ client.posts.update(proposal["data"]["id"], draft: false)
 ```
 
 ### Comment-to-DM automations
-
-> **Not yet released (coming in 0.10.0).** This section describes the next SDK release. The current release is 0.9.0.
 
 Answer a keyword in an Instagram comment with a DM, once per person, with an optional public reply under the comment. Pass `comment_dm_automation:` on `create` (Instagram must be in `channels`) and the automation is bound to that post; it starts listening once the post is live. Needs the opt-in `automations:write` scope on the key. `client.automations` manages the automations themselves (`list`, `get`, `create`, `update`, `delete`) and reads their activity (`list_events`, `automations:read`). On `update`, `comment_dm_automation:` as a Hash replaces the post's automation and an explicit `nil` removes it. Instagram rules: one private reply per comment, within 7 days; OmniSocials caps sends at 180 DMs an hour per account.
 
@@ -156,8 +152,6 @@ post = client.posts.create(
 Note that `linkedin` targets a personal LinkedIn profile and `linkedin_page` targets a LinkedIn company page. Both can be connected to the same workspace and posted to independently.
 
 ### Telegram channels and groups
-
-> **Not yet released.** Telegram comes with the next SDK release.
 
 `telegram` is a channel or group the workspace connected in OmniSocials; the OmniSocials bot posts to it. The `telegram` options: `silent`, `link_preview`, `pin`, `protect_content`, `spoiler` and `caption_above_media` (booleans), up to 3 `buttons` (`{ text, url }`, not on an album or a poll), a native `poll` (2 to 12 options of up to 100 characters, `open_period` 5 to 2628000 seconds, `multiple`; the post text is the question, max 300 characters, no media) and `first_comment` (a reply under the post). Text up to 4,096 characters; with media, text over 1,024 characters is sent as a reply under the media. Albums hold up to 10 photos and videos, files up to 50 MB, no Stories. Once sent, the post's `telegram.result` carries the message ids and the link. Telegram gives bots no view counts: analytics carry the reactions and the poll votes.
 
