@@ -129,19 +129,41 @@ module OmniSocials
       # stored options. Once sent, the Post's "telegram" block carries
       # "result" (message ids and links).
       #
+      # discord holds the Discord options (one Discord channel, posted
+      # through its incoming webhook with the webhook's name and picture):
+      # "silent", "link_preview" (default on), "allow_mentions" (default off:
+      # @everyone, @here, role and user mentions show as text and ping
+      # nobody), "spoiler" (booleans), "thread_name" (the post title in a
+      # forum or media channel, 1 to 100 characters; on a text channel the
+      # post goes out without it), up to 5 "buttons" ({ "text" => 1 to 80 characters, "url" =>
+      # https:// or http:// }, one row, not with a poll) and a native "poll"
+      # ({ "options" => 2 to 10 of up to 55 characters, "duration_hours" =>
+      # 1 to 768 (default 24), "multiple" => true }; the post text is the
+      # question, max 300 characters, no media and no buttons). Text up to
+      # 2,000 characters; up to 10 images, GIFs and videos per message, a
+      # video or GIF over 20 MB is sent as a link in the text. No Stories.
+      # On #update every key merges into the stored options, a key set to
+      # nil removes it and discord: nil removes every option. Once sent, the
+      # Post's "discord" block carries "result" (message id and link).
+      #
       # comment_dm_automation binds a comment-to-DM automation to the post
-      # (Instagram must be in channels): a keyword in a comment is answered
-      # with a DM, once per person, with an optional public reply under the
-      # comment. Shape: { "trigger" => { "keywords" => ["guide"], "match" =>
-      # "word" }, "actions" => { "dm" => { "text" => "..." }, "public_reply"
-      # => { "enabled" => true, "variations" => [...] } }, "limits" =>
-      # { "max_sends" => 500 } } (see automations.create for the fields).
-      # Needs the automations:write scope on the key (403
-      # insufficient_scope, checked before anything else); a bad Hash is a
-      # 400 validation_error whose message starts with
+      # (Instagram or Facebook must be in channels): a keyword in a comment
+      # is answered with a DM, once per person, with an optional public
+      # reply under the comment. Shape: { "trigger" => { "keywords" =>
+      # ["guide"], "match" => "word" }, "actions" => { "dm" => { "text" =>
+      # "..." }, "public_reply" => { "enabled" => true, "variations" =>
+      # [...] } }, "limits" => { "max_sends" => 500 }, "platforms" =>
+      # ["instagram", "facebook"] } (see automations.create for the
+      # fields). "platforms" makes one automation per listed channel; each
+      # must be a channel of the post. Without it: Instagram when the post
+      # goes there, else Facebook. Needs the automations:write scope on the
+      # key (403 insufficient_scope, checked before anything else); a bad
+      # Hash is a 400 validation_error whose message starts with
       # "comment_dm_automation: ". The response then carries
-      # data["comment_dm_automation"] (the automation, with "post" nil); it
-      # starts listening once the post is live on Instagram.
+      # data["comment_dm_automation"] (the first automation, with "post"
+      # nil, plus "platforms" and "automations", one { "id", "platform",
+      # "status" } per channel); each starts listening once the post is
+      # live on its channel.
       def create(content:, channels: nil, scheduled_at: nil, media_ids: nil,
                  media_urls: nil, type: nil, source: nil, link_url: nil,
                  link_title: nil, link_description: nil, link_thumbnail_url: nil,
@@ -151,7 +173,7 @@ module OmniSocials
                  instagram: nil, facebook: nil, linkedin: nil,
                  linkedin_page: nil, tiktok: nil, x: nil, bluesky: nil,
                  mastodon: nil, threads: nil, google_business: nil,
-                 telegram: nil, linkedin_poll: nil,
+                 telegram: nil, discord: nil, linkedin_poll: nil,
                  approval_workflow_id: nil, draft: nil, media_fit: nil,
                  comment_dm_automation: nil)
         body = create_body(
@@ -167,7 +189,7 @@ module OmniSocials
           linkedin: linkedin, linkedin_page: linkedin_page, tiktok: tiktok,
           x: x, bluesky: bluesky, mastodon: mastodon, threads: threads,
           google_business: google_business, telegram: telegram,
-          linkedin_poll: linkedin_poll,
+          discord: discord, linkedin_poll: linkedin_poll,
           approval_workflow_id: approval_workflow_id, draft: draft,
           media_fit: media_fit, comment_dm_automation: comment_dm_automation
         )
@@ -190,7 +212,8 @@ module OmniSocials
                              facebook: nil, linkedin: nil, linkedin_page: nil,
                              tiktok: nil, x: nil, bluesky: nil, mastodon: nil,
                              threads: nil, google_business: nil,
-                             telegram: nil, linkedin_poll: nil, media_fit: nil,
+                             telegram: nil, discord: nil, linkedin_poll: nil,
+                             media_fit: nil,
                              comment_dm_automation: nil)
         body = create_body(
           content: content, channels: channels, scheduled_at: nil,
@@ -205,7 +228,7 @@ module OmniSocials
           linkedin: linkedin, linkedin_page: linkedin_page, tiktok: tiktok,
           x: x, bluesky: bluesky, mastodon: mastodon, threads: threads,
           google_business: google_business, telegram: telegram,
-          linkedin_poll: linkedin_poll,
+          discord: discord, linkedin_poll: linkedin_poll,
           media_fit: media_fit, comment_dm_automation: comment_dm_automation
         )
         @client.request("POST", "/posts/create-and-publish", json: body)
@@ -240,16 +263,21 @@ module OmniSocials
       # can also refuse an update to a scheduled X link post.
       #
       # comment_dm_automation (same shape as on #create) as a Hash replaces
-      # the post's comment-to-DM automation, an explicit nil removes it, and
-      # leaving it out keeps it. Needs the automations:write scope.
+      # the post's comment-to-DM automations (a channel no longer in
+      # "platforms" loses its automation), an explicit nil removes them all,
+      # and leaving it out keeps them. Needs the automations:write scope.
+      #
+      # discord merges into the stored Discord options: a key set to nil
+      # removes that option (e.g. discord: { "poll" => nil }), an explicit
+      # discord: nil removes every option, and leaving it out keeps them.
       def update(post_id, content: nil, scheduled_at: nil, channels: nil,
                  media_ids: nil, media_urls: nil, type: nil, location_id: nil,
                  collaborators: nil, user_tags: nil, pinterest: nil,
                  youtube: nil, instagram: nil, facebook: nil, linkedin: nil,
                  linkedin_page: nil, tiktok: nil, x: nil, bluesky: nil,
                  mastodon: nil, threads: nil, google_business: nil,
-                 telegram: nil, linkedin_poll: nil, draft: nil,
-                 media_fit: nil,
+                 telegram: nil, discord: OmniSocials::NOT_GIVEN,
+                 linkedin_poll: nil, draft: nil, media_fit: nil,
                  comment_dm_automation: OmniSocials::NOT_GIVEN)
         body = Internal.drop_nil(
           {
@@ -283,6 +311,8 @@ module OmniSocials
         # An explicit nil removes the post's automation, so it must survive
         # drop_nil; NOT_GIVEN (the default) leaves it untouched.
         body["comment_dm_automation"] = comment_dm_automation unless comment_dm_automation.is_a?(NotGiven)
+        # Same for discord: an explicit nil removes every Discord option.
+        body["discord"] = discord unless discord.is_a?(NotGiven)
         @client.request("PATCH", "/posts/#{post_id}", json: body)
       end
 
@@ -358,7 +388,8 @@ module OmniSocials
                       pinterest:, youtube:, instagram:, facebook:, linkedin:,
                       linkedin_page:, tiktok:, x:, bluesky:, mastodon:,
                       threads:, google_business:, linkedin_poll:,
-                      telegram: nil, approval_workflow_id: nil, draft: nil,
+                      telegram: nil, discord: nil, approval_workflow_id: nil,
+                      draft: nil,
                       media_fit: nil, comment_dm_automation: nil)
         Internal.drop_nil(
           {
@@ -393,6 +424,7 @@ module OmniSocials
             "threads" => threads,
             "google_business" => google_business,
             "telegram" => telegram,
+            "discord" => discord,
             "linkedin_poll" => linkedin_poll,
             "approval_workflow_id" => approval_workflow_id,
             "draft" => draft,

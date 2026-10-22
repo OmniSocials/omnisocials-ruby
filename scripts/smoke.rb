@@ -54,7 +54,7 @@ end
 
 PLATFORM_KEYS = %i[pinterest youtube instagram facebook linkedin linkedin_page
                    tiktok x bluesky mastodon threads google_business
-                   telegram linkedin_poll].freeze
+                   telegram discord linkedin_poll].freeze
 CREATE_KEYS = (%i[channels scheduled_at media_ids media_urls type source
                   link_url link_title link_description link_thumbnail_url
                   location_id collaborators user_tags hashtag_set
@@ -129,12 +129,12 @@ EXPECTED_SURFACE = {
     validate_product: [[:req, :id]]
   },
   automations: {
-    list: kw(%i[status post_id]),
+    list: kw(%i[status post_id platform]),
     get: [[:req, :automation_id]],
     create: [[:keyreq, :actions]] +
-            kw(%i[trigger limits name post_id instagram_media_id status]),
+            kw(%i[trigger limits name post_id instagram_media_id status platform facebook_post_id]),
     update: [[:req, :automation_id]] +
-            kw(%i[name post_id instagram_media_id trigger actions limits status]),
+            kw(%i[name post_id instagram_media_id trigger actions limits status platform facebook_post_id]),
     delete: [[:req, :automation_id]],
     list_events: [[:req, :automation_id]] + kw(%i[outcome limit offset])
   },
