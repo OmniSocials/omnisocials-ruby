@@ -106,6 +106,11 @@ module OmniSocials
       # 400 validation_error asking you to reconnect Threads when the
       # connection lacks the threads_location_tagging permission).
       #
+      # Threads posts can carry a topic: threads: { "topic_tag" => "Build in
+      # public" } (1 to 50 characters, no period and no ampersand; a topic can
+      # hold spaces). On a multi-post thread it goes on part 1; on update
+      # "topic_tag" => nil removes it.
+      #
       # Pinterest posts can tag products: pass
       # pinterest: { "board_id" => "...", "product_tags" => [...] } with up
       # to 24 product Pins of the connected Pinterest account, each as a Pin
