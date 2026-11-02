@@ -61,7 +61,7 @@ module OmniSocials
     attr_reader :api_key, :base_url, :timeout, :max_retries,
                 :posts, :media, :folders, :hashtag_sets, :approval_workflows,
                 :accounts, :analytics, :audio, :locations, :pinterest,
-                :automations, :inbox, :webhooks
+                :automations, :inbox, :webhooks, :tags
 
     # api_key     - API key (omsk_live_*). Falls back to the
     #               OMNISOCIALS_API_KEY environment variable. Raises
@@ -90,6 +90,7 @@ module OmniSocials
       @media = Resources::Media.new(self)
       @folders = Resources::Folders.new(self)
       @hashtag_sets = Resources::HashtagSets.new(self)
+      @tags = Resources::Tags.new(self)
       @approval_workflows = Resources::ApprovalWorkflows.new(self)
       @accounts = Resources::Accounts.new(self)
       @analytics = Resources::Analytics.new(self)

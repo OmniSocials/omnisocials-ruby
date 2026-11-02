@@ -21,10 +21,17 @@ module OmniSocials
       # GET /posts - list posts (status: draft, in_approval, scheduled, posting,
       # posted, failed, warning; in_approval = waiting for a reviewer in an
       # approval workflow).
-      def list(status: nil, limit: nil, offset: nil)
+      # tag (a tag id or name, or an Array of them) keeps the posts with any
+      # of those tags; an unknown tag is a 404 tag_not_found. Every post
+      # carries "tags" (its tags) and "trial_reel" ({ "strategy" =>
+      # "MANUAL" | "SS_PERFORMANCE" } for an Instagram Trial Reel, else nil).
+      def list(status: nil, limit: nil, offset: nil, tag: nil)
         @client.request(
           "GET", "/posts",
-          query: { "status" => status, "limit" => limit, "offset" => offset }
+          query: {
+            "status" => status, "limit" => limit, "offset" => offset,
+            "tag" => Tags.tag_query(tag)
+          }
         )
       end
 
@@ -169,6 +176,11 @@ module OmniSocials
       # nil, plus "platforms" and "automations", one { "id", "platform",
       # "status" } per channel); each starts listening once the post is
       # live on its channel.
+      #
+      # tags labels the post with the workspace's own tags (ids or names, at
+      # most 20; a name that does not exist yet becomes a new tag) to filter
+      # and compare posts in Analytics. Tags never go to a platform. Errors:
+      # 404 tag_not_found (an unknown id), 400 invalid_tags / too_many_tags.
       def create(content:, channels: nil, scheduled_at: nil, media_ids: nil,
                  media_urls: nil, type: nil, source: nil, link_url: nil,
                  link_title: nil, link_description: nil, link_thumbnail_url: nil,
@@ -180,7 +192,7 @@ module OmniSocials
                  mastodon: nil, threads: nil, google_business: nil,
                  telegram: nil, discord: nil, linkedin_poll: nil,
                  approval_workflow_id: nil, draft: nil, media_fit: nil,
-                 comment_dm_automation: nil)
+                 comment_dm_automation: nil, tags: nil)
         body = create_body(
           content: content, channels: channels, scheduled_at: scheduled_at,
           media_ids: media_ids, media_urls: media_urls, type: type,
@@ -196,7 +208,8 @@ module OmniSocials
           google_business: google_business, telegram: telegram,
           discord: discord, linkedin_poll: linkedin_poll,
           approval_workflow_id: approval_workflow_id, draft: draft,
-          media_fit: media_fit, comment_dm_automation: comment_dm_automation
+          media_fit: media_fit, comment_dm_automation: comment_dm_automation,
+          tags: tags
         )
         @client.request("POST", "/posts/create", json: body)
       end
@@ -204,8 +217,8 @@ module OmniSocials
       # POST /posts/create-and-publish - create and publish immediately.
       # See #create for the "warnings" array (X link posts, and the
       # "image_fit" entries steered by media_fit), the 402
-      # "x_credits_insufficient" credit gate on X link posts and
-      # comment_dm_automation.
+      # "x_credits_insufficient" credit gate on X link posts,
+      # comment_dm_automation and tags.
       def create_and_publish(content:, channels: nil, media_ids: nil,
                              media_urls: nil, type: nil, source: nil,
                              link_url: nil, link_title: nil, link_description: nil,
@@ -219,7 +232,7 @@ module OmniSocials
                              threads: nil, google_business: nil,
                              telegram: nil, discord: nil, linkedin_poll: nil,
                              media_fit: nil,
-                             comment_dm_automation: nil)
+                             comment_dm_automation: nil, tags: nil)
         body = create_body(
           content: content, channels: channels, scheduled_at: nil,
           media_ids: media_ids, media_urls: media_urls, type: type,
@@ -234,7 +247,8 @@ module OmniSocials
           x: x, bluesky: bluesky, mastodon: mastodon, threads: threads,
           google_business: google_business, telegram: telegram,
           discord: discord, linkedin_poll: linkedin_poll,
-          media_fit: media_fit, comment_dm_automation: comment_dm_automation
+          media_fit: media_fit, comment_dm_automation: comment_dm_automation,
+          tags: tags
         )
         @client.request("POST", "/posts/create-and-publish", json: body)
       end
@@ -275,6 +289,11 @@ module OmniSocials
       # discord merges into the stored Discord options: a key set to nil
       # removes that option (e.g. discord: { "poll" => nil }), an explicit
       # discord: nil removes every option, and leaving it out keeps them.
+      #
+      # tags (ids or names, a new name becomes a tag) replaces the post's
+      # tags; tags: nil or tags: [] removes them all, and leaving it out
+      # keeps them. An update with only tags works on every post, published
+      # and failed ones included.
       def update(post_id, content: nil, scheduled_at: nil, channels: nil,
                  media_ids: nil, media_urls: nil, type: nil, location_id: nil,
                  collaborators: nil, user_tags: nil, pinterest: nil,
@@ -283,7 +302,8 @@ module OmniSocials
                  mastodon: nil, threads: nil, google_business: nil,
                  telegram: nil, discord: OmniSocials::NOT_GIVEN,
                  linkedin_poll: nil, draft: nil, media_fit: nil,
-                 comment_dm_automation: OmniSocials::NOT_GIVEN)
+                 comment_dm_automation: OmniSocials::NOT_GIVEN,
+                 tags: OmniSocials::NOT_GIVEN)
         body = Internal.drop_nil(
           {
             "content" => content,
@@ -318,6 +338,8 @@ module OmniSocials
         body["comment_dm_automation"] = comment_dm_automation unless comment_dm_automation.is_a?(NotGiven)
         # Same for discord: an explicit nil removes every Discord option.
         body["discord"] = discord unless discord.is_a?(NotGiven)
+        # And for tags: an explicit nil (or []) removes every tag of the post.
+        body["tags"] = tags unless tags.is_a?(NotGiven)
         @client.request("PATCH", "/posts/#{post_id}", json: body)
       end
 
@@ -395,7 +417,7 @@ module OmniSocials
                       threads:, google_business:, linkedin_poll:,
                       telegram: nil, discord: nil, approval_workflow_id: nil,
                       draft: nil,
-                      media_fit: nil, comment_dm_automation: nil)
+                      media_fit: nil, comment_dm_automation: nil, tags: nil)
         Internal.drop_nil(
           {
             "content" => content,
@@ -434,7 +456,8 @@ module OmniSocials
             "approval_workflow_id" => approval_workflow_id,
             "draft" => draft,
             "media_fit" => media_fit,
-            "comment_dm_automation" => comment_dm_automation
+            "comment_dm_automation" => comment_dm_automation,
+            "tags" => tags
           }
         )
       end

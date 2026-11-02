@@ -19,6 +19,8 @@
 # - the transport retries 429/5xx (honoring Retry-After), maps error statuses,
 #   returns nil on 204, sends the right headers, and raises
 #   APIConnectionError on connection failure (via a scripted loopback server)
+# - tags calls (and the tag fields on posts and analytics) send the right
+#   method, path, query and body
 
 require "json"
 require "openssl"
@@ -70,14 +72,14 @@ end
 
 EXPECTED_SURFACE = {
   posts: {
-    list: kw(%i[status limit offset]),
+    list: kw(%i[status limit offset start_date end_date tag]),
     get: [[:req, :post_id]],
     recent_platform: kw(%i[limit platforms]),
     create: [[:keyreq, :content]] +
-            kw(CREATE_KEYS + %i[approval_workflow_id draft media_fit comment_dm_automation]),
+            kw(CREATE_KEYS + %i[approval_workflow_id draft media_fit comment_dm_automation tags]),
     create_and_publish: [[:keyreq, :content]] +
-                        kw(CREATE_AND_PUBLISH_KEYS + %i[media_fit comment_dm_automation]),
-    update: [[:req, :post_id]] + kw(UPDATE_KEYS + %i[draft media_fit comment_dm_automation]),
+                        kw(CREATE_AND_PUBLISH_KEYS + %i[media_fit comment_dm_automation tags]),
+    update: [[:req, :post_id]] + kw(UPDATE_KEYS + %i[draft media_fit comment_dm_automation tags]),
     delete: [[:req, :post_id]],
     publish: [[:req, :post_id]],
     approve: [[:req, :post_id]],
@@ -109,6 +111,13 @@ EXPECTED_SURFACE = {
     update: [[:req, :hashtag_set_id]] + kw(%i[name hashtags]),
     delete: [[:req, :hashtag_set_id]]
   },
+  tags: {
+    list: [],
+    create: [%i[keyreq name], %i[key color]],
+    update: [[:req, :tag_id]] + kw(%i[name color]),
+    delete: [[:req, :tag_id]],
+    apply: [[:keyreq, :post_ids]] + kw(%i[add remove set])
+  },
   accounts: {
     list: [],
     get: [[:req, :account_id]]
@@ -116,9 +125,10 @@ EXPECTED_SURFACE = {
   analytics: {
     post: [[:req, :post_id]],
     posts: [[:req, :ids]],
-    overview: kw(%i[period start_date end_date]),
+    overview: kw(%i[period start_date end_date tag]),
     accounts: kw(%i[platform date]),
-    best_times: [[:keyreq, :platform], [:key, :timezone]]
+    best_times: [[:keyreq, :platform], [:key, :timezone]],
+    tags: kw(%i[start_date end_date platform min_posts])
   },
   locations: {
     search: [[:opt, :q]] + kw(%i[platform latitude longitude]),
@@ -430,6 +440,8 @@ def check_body_building
     media.upload(file: 12_345)
   end
 
+  check_tags_bodies(fake)
+
   # Query serialization
   serialized = OmniSocials::Internal.serialize_query(
     { "limit" => 50, "flag" => true, "off" => false, "skip" => nil, "s" => "q" }
@@ -453,6 +465,86 @@ def check_body_building
   later = OmniSocials::Internal.backoff_delay(10, nil)
   ok(later <= 8.0 * 1.25, "backoff_delay is capped at 8s (plus jitter)")
 end
+
+def check_tags_bodies(fake)
+  puts "Tags bodies:"
+  tags = OmniSocials::Resources::Tags.new(fake)
+  tags.list
+  ok(fake.last.method == "GET" && fake.last.path == "/tags", "tags.list GETs /tags")
+  tags.create(name: "Question")
+  ok(
+    fake.last.method == "POST" && fake.last.path == "/tags" &&
+      fake.last.json == { "name" => "Question" },
+    "tags.create POSTs /tags with only the given keys"
+  )
+  tags.create(name: "Behind the scenes", color: "teal")
+  ok(fake.last.json == { "name" => "Behind the scenes", "color" => "teal" }, "tags.create sends color")
+  tags.update(12, color: "red")
+  ok(
+    fake.last.method == "PATCH" && fake.last.path == "/tags/12" &&
+      fake.last.json == { "color" => "red" },
+    "tags.update PATCHes /tags/{id} with only the given keys"
+  )
+  tags.delete(12)
+  ok(fake.last.method == "DELETE" && fake.last.path == "/tags/12", "tags.delete DELETEs /tags/{id}")
+  tags.apply(post_ids: ["1024", 1025], add: ["Question", 7])
+  ok(
+    fake.last.method == "POST" && fake.last.path == "/tags/apply" &&
+      fake.last.json == { "post_ids" => %w[1024 1025], "add" => ["Question", 7] },
+    "tags.apply POSTs /tags/apply, post ids as strings, nils dropped"
+  )
+  tags.apply(post_ids: ["1024"], set: [])
+  ok(fake.last.json == { "post_ids" => ["1024"], "set" => [] }, "tags.apply sends set: [] (clear)")
+
+  analytics = OmniSocials::Resources::Analytics.new(fake)
+  analytics.tags(start_date: "2026-08-01", min_posts: 3)
+  ok(
+    fake.last.path == "/analytics/tags" &&
+      OmniSocials::Internal.serialize_query(fake.last.query) ==
+        { "start_date" => "2026-08-01", "min_posts" => "3" },
+    "analytics.tags GETs /analytics/tags with only the given filters"
+  )
+  analytics.overview(period: "30d", tag: %w[Question Listicle])
+  ok(
+    OmniSocials::Internal.serialize_query(fake.last.query) ==
+      { "period" => "30d", "tag" => "Question,Listicle" },
+    "analytics.overview joins a tag Array with commas"
+  )
+
+  posts = OmniSocials::Resources::Posts.new(fake)
+  posts.list(tag: 7)
+  ok(
+    OmniSocials::Internal.serialize_query(fake.last.query) == { "tag" => "7" },
+    "posts.list takes a tag id"
+  )
+  posts.create(content: "Hi", tags: ["Question", 7])
+  ok(fake.last.json == { "content" => "Hi", "tags" => ["Question", 7] }, "posts.create sends tags")
+  posts.create_and_publish(content: "Hi", tags: ["Question"])
+  ok(fake.last.json["tags"] == ["Question"], "posts.create_and_publish sends tags")
+  posts.update("55", tags: nil)
+  ok(
+    fake.last.method == "PATCH" && fake.last.json == { "tags" => nil },
+    "posts.update(tags: nil) sends an explicit null (clears)"
+  )
+  posts.update("55", content: "New text")
+  ok(!fake.last.json.key?("tags"), "posts.update leaves tags out when not given")
+end
+
+DRAFT = {
+  "name" => "Autumn sale",
+  "objective" => "traffic",
+  "platforms" => ["meta", { "platform" => "linkedin", "budget_amount" => 20 }],
+  "budget" => { "amount" => 10, "currency" => "EUR" },
+  "schedule" => { "duration_days" => nil },
+  "targeting" => { "countries" => %w[NL BE], "automatic_audience" => true },
+  "ads" => [
+    {
+      "media" => [{ "url" => "https://example.com/sale.jpg", "type" => "image" }],
+      "primary_text" => "30% off everything this week",
+      "link" => "https://example.com/sale"
+    }
+  ]
+}.freeze
 
 # ---------------------------------------------------------------------------
 # 4. Webhook verification (signed exactly like webhookDispatcher.js)

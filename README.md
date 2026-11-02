@@ -425,6 +425,37 @@ client.posts.create(
 )
 ```
 
+## Post tags
+
+Tags are your workspace's own labels for posts (a hook style, a format, a campaign), to filter posts and compare how each kind does. They never go to a platform. Uses the `posts:read` / `posts:write` scopes; the comparison uses `analytics:read`. A tag is `{ "id", "name", "color", "created_at" }`; names are unique in the workspace (case-insensitive, max 40 characters), at most 200 tags per workspace.
+
+```ruby
+tag = client.tags.create(name: "Question", color: "teal")  # color is optional
+client.tags.list
+client.tags.update(tag["data"]["id"], name: "Question hook")
+client.tags.delete(tag["data"]["id"])  # { "data" => { "tag" => ..., "posts_untagged" => 4 } }
+
+# Tag a post: ids or names, a new name becomes a tag (at most 20 per post)
+client.posts.create(content: "Would you post this?", channels: ["instagram"], tags: ["Question"])
+client.posts.update("1024", tags: ["Question", "Talking head"])  # replaces; tags: nil or [] removes all
+
+# Up to 500 posts at once, published ones included: add, remove or set (replace)
+result = client.tags.apply(post_ids: ["1024", "1025"], add: ["Question"], remove: ["Listicle"])
+puts result["data"]["updated"], result["data"]["not_found"].inspect
+
+# Filter by tag (an id or name, or an Array: posts with any of them)
+client.posts.list(tag: "Question")
+client.analytics.overview(period: "30d", tag: ["Question", "Talking head"])
+
+# How each tag did against your normal (default: the last 90 days)
+compare = client.analytics.tags(start_date: "2026-08-01", end_date: "2026-10-31")
+compare["data"]["tags"].each do |row|
+  puts "#{row["tag"]["name"]} #{row["vs_normal"]} #{row["enough_posts"]}"  # vs_normal 0.38 = 38% above
+end
+```
+
+`analytics.tags` returns `period`, `platform`, `min_posts`, `tags` (comparable tags first, best first; each with `posts`, `measured`, `median_impressions`, `engagement_rate` in percent, `vs_normal` as a fraction, `best_channel` and `enough_posts`), `untagged` (the same numbers for posts without a tag) and `normals` (median impressions per channel). `platform:` keeps one channel's numbers and `min_posts:` (default 5) sets how many measured posts a tag needs before `enough_posts` is true. Every post carries `tags` and `trial_reel` (`{ "strategy" => "MANUAL" | "SS_PERFORMANCE" }` for an Instagram Trial Reel, else `nil`), and so does every entry of `analytics.posts`. Errors: `404 tag_not_found`, `409 tag_exists` (the existing tag is in `e.body["error"]["tag"]`), `409 tag_limit_reached`, `400 invalid_tag_name`, `invalid_tag_color`, `invalid_tags`, `invalid_post_ids`, `too_many_posts`, `too_many_tags`.
+
 ## Accounts
 
 ```ruby
