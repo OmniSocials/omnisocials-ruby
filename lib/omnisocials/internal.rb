@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "cgi"
 require "json"
 require "pathname"
 
@@ -32,6 +33,12 @@ module OmniSocials
       # update clears an X thread).
       def drop_nil(hash)
         hash.reject { |_key, value| value.nil? || value.is_a?(NotGiven) }
+      end
+
+      # URL-encode an id for use as one path segment. Spaces become %20 (a
+      # path segment treats "+" literally, unlike a query string).
+      def path_segment(value)
+        CGI.escape(value.to_s).gsub("+", "%20")
       end
 
       # Join an array into a comma-separated string; pass strings through.

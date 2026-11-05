@@ -28,8 +28,11 @@ require_relative "omnisocials/resources/audio"
 require_relative "omnisocials/resources/locations"
 require_relative "omnisocials/resources/pinterest"
 require_relative "omnisocials/resources/automations"
+require_relative "omnisocials/resources/ads"
 require_relative "omnisocials/resources/inbox"
 require_relative "omnisocials/resources/webhooks"
+require_relative "omnisocials/resources/limits"
+require_relative "omnisocials/resources/feature_requests"
 require_relative "omnisocials/client"
 
 module OmniSocials

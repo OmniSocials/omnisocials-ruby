@@ -38,6 +38,7 @@ module OmniSocials
       "GET" => Net::HTTP::Get,
       "POST" => Net::HTTP::Post,
       "PATCH" => Net::HTTP::Patch,
+      "PUT" => Net::HTTP::Put,
       "DELETE" => Net::HTTP::Delete
     }.freeze
 
@@ -61,7 +62,8 @@ module OmniSocials
     attr_reader :api_key, :base_url, :timeout, :max_retries,
                 :posts, :media, :folders, :hashtag_sets, :approval_workflows,
                 :accounts, :analytics, :audio, :locations, :pinterest,
-                :automations, :inbox, :webhooks, :tags
+                :automations, :ads, :inbox, :webhooks, :tags,
+                :limits, :feature_requests
 
     # api_key     - API key (omsk_live_*). Falls back to the
     #               OMNISOCIALS_API_KEY environment variable. Raises
@@ -98,8 +100,11 @@ module OmniSocials
       @locations = Resources::Locations.new(self)
       @pinterest = Resources::Pinterest.new(self)
       @automations = Resources::Automations.new(self)
+      @ads = Resources::Ads.new(self)
       @inbox = Resources::Inbox.new(self)
       @webhooks = Resources::Webhooks.new(self)
+      @limits = Resources::Limits.new(self)
+      @feature_requests = Resources::FeatureRequests.new(self)
     end
 
     # GET /health - API health check (no scopes required).
@@ -113,7 +118,11 @@ module OmniSocials
     # non-JSON responses, or nil for 204. Raises an OmniSocials::APIError
     # subclass on non-2xx and OmniSocials::APIConnectionError when no
     # response was ever received.
-    def request(method, path, query: nil, json: nil, multipart: nil)
+    #
+    # retry_on: :rate_limit retries only a 429. A call that can start ad
+    # spend uses it: after a 5xx, a timeout or a lost connection the first
+    # attempt may have gone through, so it is never sent again.
+    def request(method, path, query: nil, json: nil, multipart: nil, retry_on: nil)
       uri = build_uri(path, query)
       last_error = nil
 
@@ -122,13 +131,14 @@ module OmniSocials
           response = perform(method, uri, json: json, multipart: multipart)
         rescue *CONNECTION_ERRORS => e
           last_error = e
-          break if attempt >= max_retries
+          # Not sent again when the call may have started ad spend.
+          break if retry_on == :rate_limit || attempt >= max_retries
 
           sleep(Internal.backoff_delay(attempt, nil))
           next
         end
 
-        should_retry, retry_after = retry_info(response)
+        should_retry, retry_after = retry_info(response, retry_on)
         if should_retry && attempt < max_retries
           sleep(Internal.backoff_delay(attempt, retry_after))
           next
@@ -178,9 +188,10 @@ module OmniSocials
       http.start { |conn| conn.request(req) }
     end
 
-    def retry_info(response)
+    def retry_info(response, retry_on)
       status = response.code.to_i
-      if RETRY_STATUSES.include?(status) || status >= 500
+      server_error = RETRY_STATUSES.include?(status) || status >= 500
+      if status == 429 || (server_error && retry_on != :rate_limit)
         [true, parse_retry_after(response, Internal.parse_body(response.body))]
       else
         [false, nil]

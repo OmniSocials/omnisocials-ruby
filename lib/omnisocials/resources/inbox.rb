@@ -193,8 +193,9 @@ module OmniSocials
         )
       end
 
-      # DELETE /inbox/messages/{id} - delete a comment someone left on one of
-      # the user's posts, on the platform and from the inbox. Facebook,
+      # DELETE /inbox/messages/{id} - delete a comment on one of the user's
+      # posts, on the platform and from the inbox: a comment someone left, or
+      # one of the user's own replies (direction "outgoing"). Facebook,
       # Instagram and TikTok comments only: YouTube's API does not let a
       # channel delete other people's comments, hide those instead (`hide`).
       # Replies under the deleted comment go with it (the platforms cascade

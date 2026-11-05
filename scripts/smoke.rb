@@ -21,6 +21,11 @@
 #   APIConnectionError on connection failure (via a scripted loopback server)
 # - tags calls (and the tag fields on posts and analytics) send the right
 #   method, path, query and body
+# - limits and feature request calls send the right method, path, query and
+#   body; a create returns the outcome and a 409 not_requestable keeps the
+#   limit in the error body
+# - ads calls send the right method, path and body; a call that can start ad
+#   spend is sent once after a 502 or a lost connection, a read is retried
 
 require "json"
 require "openssl"
@@ -148,6 +153,28 @@ EXPECTED_SURFACE = {
     delete: [[:req, :automation_id]],
     list_events: [[:req, :automation_id]] + kw(%i[outcome limit offset])
   },
+  ads: {
+    list_accounts: [],
+    capabilities: [],
+    list: kw(%i[status platform campaign_type limit offset]),
+    get: [[:req, :campaign_id]],
+    boost: [%i[keyreq post_id], %i[keyreq ad_account_id], %i[keyreq budget]] +
+           kw(%i[objective targeting schedule creative name]),
+    boost_multi: [%i[keyreq post_id], %i[keyreq ad_account_ids], %i[keyreq budget]] +
+                 kw(%i[objective targeting schedule creative name]),
+    create: [%i[keyreq ad_account_id], %i[keyreq name], %i[keyreq budget]] +
+            kw(%i[objective targeting schedule]),
+    update: [[:req, :campaign_id]] + kw(%i[name budget confirm_budget_amount targeting schedule]),
+    activate: [%i[req campaign_id], %i[req confirm_budget_amount]],
+    activate_multi: [%i[req campaign_ids], %i[req confirm_budget_amount]],
+    pause: [[:req, :campaign_id]],
+    resume: [[:req, :campaign_id]],
+    delete: [[:req, :campaign_id]],
+    overview: [],
+    suggestions: [],
+    research_keywords: kw(%i[keywords url country language limit ad_account_id]),
+    keyword_metrics: [[:keyreq, :keywords]] + kw(%i[country language ad_account_id])
+  },
   webhooks: {
     list: [],
     get: [[:req, :webhook_id]],
@@ -155,7 +182,27 @@ EXPECTED_SURFACE = {
     update: [[:req, :webhook_id]] + kw(%i[url events is_active]),
     delete: [[:req, :webhook_id]],
     rotate_secret: [[:req, :webhook_id]]
+  },
+  limits: {
+    list: kw(%i[platform area])
+  },
+  feature_requests: {
+    create: [[:keyreq, :summary]] + kw(%i[title platform area limit_id]),
+    list: [],
+    get: [[:req, :request_id]]
   }
+}.freeze
+
+DRAFT_KEYS = [%i[keyreq objective], %i[keyreq platforms], %i[keyreq budget],
+              %i[keyreq targeting], %i[keyreq ads], %i[key name], %i[key schedule]].freeze
+EXPECTED_DRAFTS_SURFACE = {
+  defaults: [],
+  create: DRAFT_KEYS,
+  get: [[:req, :group_id]],
+  update: [[:req, :group_id]] + DRAFT_KEYS,
+  delete: [[:req, :group_id]],
+  attach_account: [%i[req group_id], %i[keyreq platform], %i[keyreq ad_account_id]],
+  launch: [[:req, :group_id]] + kw(%i[confirm_budget_amount confirm_budget_amounts])
 }.freeze
 
 def check_client_surface
@@ -174,6 +221,17 @@ def check_client_surface
         "(#{actual.inspect} vs #{expected_params.inspect})"
       )
     end
+  end
+
+  drafts = client.ads.drafts
+  ok(drafts.is_a?(OmniSocials::Resources::AdDrafts), "client.ads.drafts exists")
+  EXPECTED_DRAFTS_SURFACE.each do |method_name, expected_params|
+    actual = drafts.method(method_name).parameters.map { |kind, name| [kind, name] }
+    ok(
+      actual == expected_params,
+      "client.ads.drafts.#{method_name} params match " \
+      "(#{actual.inspect} vs #{expected_params.inspect})"
+    )
   end
 
   ok(client.respond_to?(:health), "client.health exists")
@@ -266,7 +324,7 @@ end
 # ---------------------------------------------------------------------------
 
 class FakeTransport
-  Call = Struct.new(:method, :path, :query, :json, :multipart)
+  Call = Struct.new(:method, :path, :query, :json, :multipart, :retry_on)
 
   attr_reader :calls
 
@@ -274,8 +332,8 @@ class FakeTransport
     @calls = []
   end
 
-  def request(method, path, query: nil, json: nil, multipart: nil)
-    @calls << Call.new(method, path, query, json, multipart)
+  def request(method, path, query: nil, json: nil, multipart: nil, retry_on: nil)
+    @calls << Call.new(method, path, query, json, multipart, retry_on)
     { "data" => {} }
   end
 
@@ -441,6 +499,8 @@ def check_body_building
   end
 
   check_tags_bodies(fake)
+  check_feature_requests_bodies(fake)
+  check_ads_bodies(fake)
 
   # Query serialization
   serialized = OmniSocials::Internal.serialize_query(
@@ -530,6 +590,42 @@ def check_tags_bodies(fake)
   ok(!fake.last.json.key?("tags"), "posts.update leaves tags out when not given")
 end
 
+def check_feature_requests_bodies(fake)
+  puts "Limits and feature request bodies:"
+  limits = OmniSocials::Resources::Limits.new(fake)
+  limits.list(platform: "tiktok", area: "posts")
+  ok(
+    fake.last.method == "GET" && fake.last.path == "/limits" &&
+      OmniSocials::Internal.serialize_query(fake.last.query) == { "platform" => "tiktok", "area" => "posts" },
+    "limits.list GETs /limits with platform and area"
+  )
+  limits.list
+  ok(OmniSocials::Internal.serialize_query(fake.last.query).nil?, "limits.list without filters sends no query")
+
+  requests = OmniSocials::Resources::FeatureRequests.new(fake)
+  requests.create(
+    summary: "Post our daily update to the Announcements topic of our Telegram group.",
+    platform: "telegram", limit_id: "telegram.forum_topics"
+  )
+  ok(
+    fake.last.method == "POST" && fake.last.path == "/feature-requests" &&
+      fake.last.json == {
+        "summary" => "Post our daily update to the Announcements topic of our Telegram group.",
+        "platform" => "telegram", "limit_id" => "telegram.forum_topics"
+      },
+    "feature_requests.create POSTs only the given keys (never source)"
+  )
+  requests.create(summary: "Reply to Google reviews from the inbox.", title: "Review replies", area: "inbox")
+  ok(
+    fake.last.json == { "summary" => "Reply to Google reviews from the inbox.", "title" => "Review replies", "area" => "inbox" },
+    "feature_requests.create sends title and area"
+  )
+  requests.list
+  ok(fake.last.method == "GET" && fake.last.path == "/feature-requests", "feature_requests.list GETs /feature-requests")
+  requests.get(412)
+  ok(fake.last.method == "GET" && fake.last.path == "/feature-requests/412", "feature_requests.get GETs /feature-requests/{id}")
+end
+
 DRAFT = {
   "name" => "Autumn sale",
   "objective" => "traffic",
@@ -545,6 +641,96 @@ DRAFT = {
     }
   ]
 }.freeze
+
+def draft_kwargs
+  DRAFT.transform_keys(&:to_sym)
+end
+
+def check_ads_bodies(fake)
+  ads = OmniSocials::Resources::Ads.new(fake)
+
+  ads.drafts.create(**draft_kwargs)
+  ok(
+    fake.last.method == "POST" && fake.last.path == "/ads/drafts" && fake.last.json == DRAFT,
+    "ads.drafts.create POSTs the draft to /ads/drafts (nested nil kept)"
+  )
+  ok(fake.last.retry_on.nil?, "ads.drafts.create keeps the normal retries")
+
+  ads.drafts.update("g 1/x", **draft_kwargs)
+  ok(
+    fake.last.method == "PUT" && fake.last.path == "/ads/drafts/g%201%2Fx" &&
+      fake.last.json == DRAFT,
+    "ads.drafts.update PUTs the full body with the group id encoded"
+  )
+
+  ads.drafts.launch("g-1", confirm_budget_amount: 10)
+  ok(
+    fake.last.method == "POST" && fake.last.path == "/ads/drafts/g-1/launch" &&
+      fake.last.json == { "confirm_budget_amount" => 10 },
+    "ads.drafts.launch POSTs the confirmed amount"
+  )
+  ok(fake.last.retry_on == :rate_limit, "ads.drafts.launch retries a 429 only")
+  ads.drafts.launch("g-1", confirm_budget_amounts: { "7" => 10 })
+  ok(
+    fake.last.json == { "confirm_budget_amounts" => { "7" => 10 } },
+    "ads.drafts.launch sends per campaign amounts"
+  )
+
+  ads.activate(7, 25)
+  ok(
+    fake.last.method == "POST" && fake.last.path == "/ads/campaigns/7/activate" &&
+      fake.last.json == { "confirm_budget_amount" => 25 },
+    "ads.activate POSTs confirm_budget_amount"
+  )
+  ok(fake.last.retry_on == :rate_limit, "ads.activate retries a 429 only")
+
+  ads.activate("51", 25)
+  ok(
+    fake.last.path == "/ads/campaigns/51/activate",
+    "ads.activate takes the id as a String (the API sends ids as strings)"
+  )
+
+  ads.activate_multi([7, 8], 25)
+  ok(
+    fake.last.path == "/ads/campaigns/activate-multi" &&
+      fake.last.json == { "campaign_ids" => [7, 8], "confirm_budget_amount" => 25 } &&
+      fake.last.retry_on == :rate_limit,
+    "ads.activate_multi sends campaign_ids and retries a 429 only"
+  )
+
+  ads.resume(7)
+  ok(fake.last.retry_on == :rate_limit, "ads.resume retries a 429 only")
+  ads.update(7, budget: { "amount" => 50, "currency" => "EUR" }, confirm_budget_amount: 50)
+  ok(
+    fake.last.method == "PATCH" && fake.last.retry_on == :rate_limit &&
+      fake.last.json == { "budget" => { "amount" => 50, "currency" => "EUR" },
+                          "confirm_budget_amount" => 50 },
+    "ads.update PATCHes the budget and retries a 429 only"
+  )
+
+  ads.boost(post_id: 12_345, ad_account_id: 3, budget: { "amount" => 5, "currency" => "EUR" })
+  ok(
+    fake.last.path == "/ads/boost" &&
+      fake.last.json == { "post_id" => 12_345, "ad_account_id" => 3,
+                          "budget" => { "amount" => 5, "currency" => "EUR" } } &&
+      fake.last.retry_on.nil?,
+    "ads.boost makes a draft and keeps the normal retries"
+  )
+
+  ads.drafts.attach_account("g-1", platform: "meta", ad_account_id: 3)
+  ok(
+    fake.last.path == "/ads/drafts/g-1/account" &&
+      fake.last.json == { "platform" => "meta", "ad_account_id" => 3 },
+    "ads.drafts.attach_account POSTs the platform and the ad account"
+  )
+
+  ads.list(status: "active", limit: 5)
+  ok(
+    fake.last.method == "GET" && fake.last.path == "/ads/campaigns" &&
+      OmniSocials::Internal.serialize_query(fake.last.query) == { "status" => "active", "limit" => "5" },
+    "ads.list sends only the given filters"
+  )
+end
 
 # ---------------------------------------------------------------------------
 # 4. Webhook verification (signed exactly like webhookDispatcher.js)
@@ -601,6 +787,31 @@ def check_webhook_verification
     "post.rejected event keeps its approval object"
   )
 
+  ad_event = {
+    "id" => "b1f2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+    "type" => "ad.status_changed",
+    "created_at" => "2026-07-13T10:00:05Z",
+    "data" => {
+      "campaign_id" => 42,
+      "workspace_id" => "456",
+      "name" => "Boost: Summer launch post",
+      "platform" => "meta",
+      "campaign_type" => "boost",
+      "status" => "active",
+      "previous_status" => "pending_review",
+      "external_campaign_id" => "23851234567890123",
+      "budget" => { "type" => "daily", "amount" => 10, "currency" => "EUR" }
+    }
+  }
+  ad_body = JSON.generate(ad_event)
+  parsed_ad = OmniSocials::Webhooks.verify(
+    payload: ad_body, signature: build_signature(secret, timestamp, ad_body), secret: secret
+  )
+  ok(
+    parsed_ad["type"] == "ad.status_changed" && parsed_ad["data"] == ad_event["data"],
+    "ad.status_changed event verifies and keeps its campaign data"
+  )
+
   tampered = raw_body.sub("posted", "hacked")
   assert_raises(OmniSocials::WebhookVerificationError, "tampered body raises") do
     OmniSocials::Webhooks.verify(payload: tampered, signature: signature, secret: secret)
@@ -649,8 +860,8 @@ end
 
 def http_response(status, body = "", headers = {})
   reason = {
-    200 => "OK", 204 => "No Content", 404 => "Not Found",
-    429 => "Too Many Requests", 500 => "Internal Server Error"
+    200 => "OK", 201 => "Created", 204 => "No Content", 404 => "Not Found", 409 => "Conflict",
+    429 => "Too Many Requests", 500 => "Internal Server Error", 502 => "Bad Gateway"
   }.fetch(status)
   all = { "Connection" => "close" }
   unless status == 204
@@ -665,23 +876,36 @@ def http_response(status, body = "", headers = {})
   raw
 end
 
+# Read one request: the head, then the body up to its Content-Length.
+def read_request(sock)
+  raw = +""
+  raw << sock.readpartial(65_536) until raw.include?("\r\n\r\n")
+  head, body = raw.split("\r\n\r\n", 2)
+  length = head[/^content-length:\s*(\d+)/i, 1].to_i
+  body << sock.readpartial(65_536) while body.bytesize < length
+  "#{head}\r\n\r\n#{body}"
+end
+
+# Serves the scripted responses in order (:drop closes the connection without
+# an answer), then records any further request and answers it with a 500, so
+# a test sees a retry it did not script.
 def with_scripted_server(responses)
   server = TCPServer.new("127.0.0.1", 0)
   port = server.addr[1]
   requests = []
+  unexpected = http_response(500, '{"error":{"message":"unexpected request"}}')
   thread = Thread.new do
-    responses.each do |response|
+    Thread.current.report_on_exception = false
+    (responses + [unexpected] * 5).each do |response|
       sock = server.accept
-      raw = +""
-      raw << sock.readpartial(65_536) until raw.include?("\r\n\r\n")
-      requests << raw
-      sock.write(response)
+      requests << read_request(sock)
+      sock.write(response) unless response == :drop
       sock.close
     end
   end
   yield port, requests
-  thread.join(10)
 ensure
+  thread&.kill
   server.close
 end
 
@@ -757,6 +981,9 @@ def check_live_transport
     ok(err.code == "rate_limited", "RateLimitError#code comes from the body")
   end
 
+  check_feature_requests_transport
+  check_ads_transport
+
   # Connection refused raises APIConnectionError.
   closed_port_server = TCPServer.new("127.0.0.1", 0)
   closed_port = closed_port_server.addr[1]
@@ -766,6 +993,112 @@ def check_live_transport
   )
   assert_raises(OmniSocials::APIConnectionError, "connection failure raises APIConnectionError") do
     client.health
+  end
+end
+
+def check_feature_requests_transport
+  limit = {
+    "id" => "tiktok.delete", "kind" => "platform", "kind_label" => "The platform does not allow it",
+    "area" => "posts", "platforms" => ["tiktok"], "title" => "Delete a TikTok video",
+    "says" => "TikTok's API cannot delete a video.", "instead" => "Delete the video in the TikTok app.",
+    "requestable" => false
+  }
+  conflict = JSON.generate(
+    "error" => {
+      "code" => "not_requestable",
+      "message" => "TikTok's API cannot delete a video. A request cannot change this, so nothing was sent.",
+      "limit" => limit
+    }
+  )
+  with_scripted_server([http_response(409, conflict)]) do |port, requests|
+    err = assert_raises(OmniSocials::APIError, "a not_requestable limit raises APIError") do
+      ads_client(port).feature_requests.create(summary: "Delete my TikTok videos.", limit_id: "tiktok.delete")
+    end
+    ok(
+      err.status == 409 && err.code == "not_requestable" &&
+        err.body["error"]["limit"]["instead"] == "Delete the video in the TikTok app.",
+      "409 not_requestable keeps the limit in the error body"
+    )
+    ok(requests.length == 1, "a 409 is not retried")
+  end
+
+  with_scripted_server(
+    [http_response(200, '{"outcome":"already_requested","data":{"id":412,"status":"open"}}')]
+  ) do |port, _requests|
+    result = ads_client(port).feature_requests.create(summary: "Post to a Telegram topic, please.")
+    ok(
+      result["outcome"] == "already_requested" && result["data"]["id"] == 412,
+      "feature_requests.create returns the outcome next to data"
+    )
+  end
+end
+
+def ads_client(port)
+  OmniSocials::Client.new(
+    api_key: "omsk_test_x", base_url: "http://127.0.0.1:#{port}", timeout: 5
+  )
+end
+
+def check_ads_transport
+  bad_gateway = http_response(
+    502, '{"error":{"code":"bad_gateway","message":"upstream"}}', { "Retry-After" => "0" }
+  )
+  money_calls = {
+    "drafts.launch" => ->(ads) { ads.drafts.launch("g-1", confirm_budget_amount: 10) },
+    "activate" => ->(ads) { ads.activate(7, 25) },
+    "activate_multi" => ->(ads) { ads.activate_multi([7, 8], 25) },
+    "resume" => ->(ads) { ads.resume(7) },
+    "update" => ->(ads) { ads.update(7, budget: { "amount" => 50, "currency" => "EUR" }, confirm_budget_amount: 50) }
+  }
+
+  money_calls.each do |name, call|
+    with_scripted_server([bad_gateway]) do |port, requests|
+      assert_raises(OmniSocials::ServerError, "ads.#{name} raises ServerError on a 502") do
+        call.call(ads_client(port).ads)
+      end
+      ok(requests.length == 1, "ads.#{name} after a 502 is sent exactly once")
+    end
+  end
+
+  with_scripted_server([bad_gateway]) do |port, requests|
+    ads_client(port).ads.drafts.launch("g-1", confirm_budget_amount: 10) rescue nil
+    ok(
+      requests[0].start_with?("POST /ads/drafts/g-1/launch HTTP/1.1") &&
+        requests[0].end_with?('{"confirm_budget_amount":10}'),
+      "ads.drafts.launch sends POST /ads/drafts/g-1/launch with the amount"
+    )
+  end
+
+  with_scripted_server([:drop]) do |port, requests|
+    assert_raises(OmniSocials::APIConnectionError, "a lost connection on ads.activate raises") do
+      ads_client(port).ads.activate(7, 25)
+    end
+    ok(requests.length == 1, "ads.activate after a lost connection is sent exactly once")
+  end
+
+  with_scripted_server(
+    [http_response(429, '{"error":{"code":"rate_limited"}}', { "Retry-After" => "0" }),
+     http_response(200, '{"data":{"ok":true}}')]
+  ) do |port, requests|
+    ads_client(port).ads.activate(7, 25)
+    ok(requests.length == 2, "ads.activate after a 429 is retried")
+  end
+
+  with_scripted_server([bad_gateway, http_response(200, '{"data":{"ok":true}}')]) do |port, requests|
+    result = ads_client(port).ads.capabilities
+    ok(
+      requests.length == 2 && result == { "data" => { "ok" => true } },
+      "ads.capabilities (a read) after a 502 is retried"
+    )
+  end
+
+  with_scripted_server([http_response(200, '{"data":{"ok":true}}')]) do |port, requests|
+    ads_client(port).ads.drafts.update("g-1", **draft_kwargs)
+    ok(
+      requests[0].start_with?("PUT /ads/drafts/g-1 HTTP/1.1") &&
+        JSON.parse(requests[0].split("\r\n\r\n", 2)[1]) == DRAFT,
+      "ads.drafts.update sends PUT /ads/drafts/g-1 with the full body"
+    )
   end
 end
 

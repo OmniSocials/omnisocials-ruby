@@ -21,15 +21,21 @@ module OmniSocials
       # GET /posts - list posts (status: draft, in_approval, scheduled, posting,
       # posted, failed, warning; in_approval = waiting for a reviewer in an
       # approval workflow).
+      # start_date / end_date keep posts whose schedule_at falls in the
+      # period, both inclusive: "YYYY-MM-DD" (a UTC day), "YYYY-MM" (a month)
+      # or an ISO 8601 datetime. With a range the posts come in calendar order
+      # (earliest first).
       # tag (a tag id or name, or an Array of them) keeps the posts with any
       # of those tags; an unknown tag is a 404 tag_not_found. Every post
       # carries "tags" (its tags) and "trial_reel" ({ "strategy" =>
       # "MANUAL" | "SS_PERFORMANCE" } for an Instagram Trial Reel, else nil).
-      def list(status: nil, limit: nil, offset: nil, tag: nil)
+      def list(status: nil, limit: nil, offset: nil, start_date: nil, end_date: nil,
+               tag: nil)
         @client.request(
           "GET", "/posts",
           query: {
             "status" => status, "limit" => limit, "offset" => offset,
+            "start_date" => start_date, "end_date" => end_date,
             "tag" => Tags.tag_query(tag)
           }
         )
@@ -166,7 +172,9 @@ module OmniSocials
       # "..." }, "public_reply" => { "enabled" => true, "variations" =>
       # [...] } }, "limits" => { "max_sends" => 500 }, "platforms" =>
       # ["instagram", "facebook"] } (see automations.create for the
-      # fields). "platforms" makes one automation per listed channel; each
+      # fields, also the actions "follow_gate", Follow first, which applies
+      # to the Instagram automation only). "platforms" makes one automation
+      # per listed channel; each
       # must be a channel of the post. Without it: Instagram when the post
       # goes there, else Facebook. Needs the automations:write scope on the
       # key (403 insufficient_scope, checked before anything else); a bad
