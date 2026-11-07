@@ -87,8 +87,8 @@ EXPECTED_SURFACE = {
     update: [[:req, :post_id]] + kw(UPDATE_KEYS + %i[draft media_fit comment_dm_automation tags]),
     delete: [[:req, :post_id]],
     publish: [[:req, :post_id]],
-    approve: [[:req, :post_id]],
-    reject: [[:req, :post_id]] + kw(%i[comment]),
+    approve: [[:req, :post_id]] + kw(%i[step_order]),
+    reject: [[:req, :post_id]] + kw(%i[comment step_order]),
     get_approval: [[:req, :post_id]]
   },
   media: {
@@ -162,9 +162,10 @@ EXPECTED_SURFACE = {
            kw(%i[objective targeting schedule creative name]),
     boost_multi: [%i[keyreq post_id], %i[keyreq ad_account_ids], %i[keyreq budget]] +
                  kw(%i[objective targeting schedule creative name]),
-    create: [%i[keyreq ad_account_id], %i[keyreq name], %i[keyreq budget]] +
-            kw(%i[objective targeting schedule]),
-    update: [[:req, :campaign_id]] + kw(%i[name budget confirm_budget_amount targeting schedule]),
+    update: [[:req, :campaign_id]] +
+            kw(%i[name budget confirm_budget_amount targeting schedule objective settings]),
+    bulk_status: [%i[keyreq campaign_ids], %i[keyreq status], %i[key confirm_budget_amount]],
+    duplicate: [[:req, :campaign_id], %i[key name]],
     activate: [%i[req campaign_id], %i[req confirm_budget_amount]],
     activate_multi: [%i[req campaign_ids], %i[req confirm_budget_amount]],
     pause: [[:req, :campaign_id]],
@@ -205,6 +206,192 @@ EXPECTED_DRAFTS_SURFACE = {
   launch: [[:req, :group_id]] + kw(%i[confirm_budget_amount confirm_budget_amounts])
 }.freeze
 
+# The Ads API parity sub-resources (2026-11-05): one method per route of
+# backend/routes/api/v1/adsParity.js, with its exact parameters.
+def req(*names)
+  names.map { |name| [:req, name] }
+end
+
+def keyreq(*names)
+  names.map { |name| [:keyreq, name] }
+end
+
+ADS_PARITY_SURFACE = {
+  objects: {
+    tree: req(:account_id) + kw(%i[from to status limit cursor]),
+    get: req(:account_id, :level, :external_id),
+    update: req(:account_id, :level, :external_id) + kw(%i[name budget end_at confirm_budget_amount]),
+    set_status: req(:account_id, :level, :external_id) + keyreq(:status) + kw(%i[confirm_budget_amount]),
+    duplicate: req(:account_id, :level, :external_id) + kw(%i[deep rename]),
+    import_status: req(:account_id),
+    start_import: req(:account_id),
+    list_external: kw(%i[ad_account_id platform status limit offset]),
+    get_external: req(:campaign_id) + kw(%i[from to])
+  },
+  campaign_ads: {
+    list: req(:campaign_id),
+    add: req(:campaign_id, :ads),
+    get: req(:campaign_id, :ad_id),
+    set_status: req(:campaign_id, :ad_id) + keyreq(:status) + kw(%i[confirm_budget_amount]),
+    review: req(:campaign_id, :ad_id)
+  },
+  comments: {
+    list: req(:campaign_id, :ad_id) + kw(%i[cursor]),
+    reply: req(:campaign_id, :ad_id, :comment_id, :text),
+    hide: req(:campaign_id, :ad_id, :comment_id) + kw(%i[hidden]),
+    delete: req(:campaign_id, :ad_id, :comment_id)
+  },
+  targeting: {
+    search: keyreq(:ad_account_id, :type, :q) + kw(%i[limit country]),
+    browse: keyreq(:ad_account_id, :type),
+    reach_estimate: keyreq(:ad_account_id, :targeting) + kw(%i[objective]),
+    bid_suggestions: keyreq(:ad_account_id, :targeting) + kw(%i[objective budget])
+  },
+  audiences: {
+    list: keyreq(:ad_account_id) + kw(%i[cursor]),
+    create: keyreq(:ad_account_id, :name) +
+            kw(%i[description kind lookalike customer_file_source schema rows]),
+    get: req(:audience_id) + keyreq(:ad_account_id),
+    update: req(:audience_id) + keyreq(:ad_account_id) + kw(%i[name description]),
+    delete: req(:audience_id) + keyreq(:ad_account_id),
+    add_members: req(:audience_id) + keyreq(:ad_account_id, :schema, :rows),
+    remove_members: req(:audience_id) + keyreq(:ad_account_id, :schema, :rows),
+    add_companies: req(:audience_id) + keyreq(:ad_account_id, :companies)
+  },
+  lead_forms: {
+    list: keyreq(:ad_account_id),
+    create: keyreq(:ad_account_id, :name, :privacy_policy_url, :questions, :thank_you) +
+            kw(%i[locale headline description accept_terms]),
+    get: req(:form_id),
+    update: req(:form_id) + kw(%i[status sync_enabled]),
+    delete: req(:form_id),
+    send_test_lead: req(:form_id) + kw(%i[fields])
+  },
+  leads: {
+    list: kw(%i[form_id status since until_time limit cursor]),
+    counts: kw(%i[form_id]),
+    update: req(:lead_id) + kw(%i[status note])
+  },
+  conversions: {
+    destinations: keyreq(:ad_account_id),
+    goals: keyreq(:ad_account_id),
+    create_custom: keyreq(:ad_account_id, :name, :destination_id) + kw(%i[event url_contains]),
+    send_events: keyreq(:ad_account_id, :destination_id, :events)
+  },
+  insights: {
+    query: keyreq(:ad_account_id) + kw(%i[level ids metrics breakdowns from to time_increment]),
+    campaign: req(:campaign_id) + kw(%i[from to breakdown time_increment metrics]),
+    ad: req(:campaign_id, :ad_id) + kw(%i[from to breakdown]),
+    timeline: kw(%i[from to platform source]),
+    performance: kw(%i[level metric order limit min_impressions from to platform]),
+    alerts: []
+  },
+  reports: {
+    list: [],
+    start: keyreq(:ad_account_id) + kw(%i[level ids metrics breakdowns from to time_increment]),
+    get: req(:report_id)
+  },
+  rules: {
+    list: [],
+    create: keyreq(:name, :conditions, :action) +
+            kw(%i[ad_account_id enabled scope every_minutes cooldown_minutes max_actions_per_run
+                  confirm_max_daily_budget]),
+    templates: [],
+    preview: keyreq(:conditions, :action) + kw(%i[name ad_account_id scope]),
+    activity: kw(%i[rule_id limit]),
+    undo: req(:activity_id) + kw(%i[confirm_budget_amount]),
+    get: req(:rule_id),
+    update: req(:rule_id) +
+            kw(%i[name conditions action ad_account_id enabled scope every_minutes cooldown_minutes
+                  max_actions_per_run confirm_max_daily_budget]),
+    delete: req(:rule_id),
+    preview_saved: req(:rule_id),
+    runs: req(:rule_id) + kw(%i[limit])
+  },
+  results: {
+    list: kw(%i[from to campaign_id metric]),
+    upload: req(:rows),
+    totals: kw(%i[from to campaign_id]),
+    metrics: [],
+    put_metric: req(:key) + kw(%i[label unit formula])
+  },
+  media: {
+    list: keyreq(:ad_account_id) + kw(%i[type cursor]),
+    upload: keyreq(:ad_account_id, :type, :url) + kw(%i[name]),
+    get: req(:media_id) + keyreq(:ad_account_id) + kw(%i[type]),
+    delete: req(:media_id) + keyreq(:ad_account_id, :type)
+  },
+  previews: {
+    create: keyreq(:ad_account_id, :ad) + kw(%i[placements objective]),
+    for_ad: req(:campaign_id, :ad_id) + kw(%i[placements])
+  },
+  partnership: {
+    list_content: keyreq(:ad_account_id),
+    list_permissions: keyreq(:ad_account_id),
+    set_permission: keyreq(:ad_account_id) + [%i[keyrest fields]]
+  },
+  accounts: {
+    identities: req(:account_id),
+    health: req(:account_id),
+    finance: req(:account_id),
+    update_settings: req(:account_id) +
+                     kw(%i[spend_cap dsa_beneficiary dsa_payor name confirm_budget_amount]),
+    list_users: req(:account_id),
+    add_user: req(:account_id) + keyreq(:role) + kw(%i[email member_id]),
+    remove_user: req(:account_id, :user_id),
+    activity: req(:account_id) + kw(%i[since until_time cursor]),
+    businesses: req(:account_id),
+    dsa: req(:account_id),
+    hierarchy: req(:account_id)
+  },
+  reach_frequency: {
+    create: keyreq(:ad_account_id, :objective, :targeting, :start_at, :end_at) +
+            kw(%i[budget reach frequency_cap frequency_interval_days]),
+    get: req(:prediction_id) + keyreq(:ad_account_id),
+    cancel: req(:prediction_id) + keyreq(:ad_account_id),
+    reserve: req(:prediction_id) + keyreq(:ad_account_id, :confirm_budget_amount)
+  },
+  studies: {
+    list: keyreq(:ad_account_id),
+    create: keyreq(:ad_account_id) + [%i[keyrest fields]]
+  },
+  budget_schedules: {
+    list: req(:campaign_id),
+    create: req(:campaign_id) + keyreq(:start_at, :end_at, :budget_increase, :confirm_budget_amount),
+    delete: req(:campaign_id, :schedule_id)
+  },
+  google: {
+    search_terms: keyreq(:ad_account_id) + kw(%i[campaign_id external_campaign_id from to limit]),
+    recommendations: keyreq(:ad_account_id) + kw(%i[types]),
+    keywords: keyreq(:ad_account_id) + kw(%i[external_campaign_id external_ad_set_id]),
+    assets: keyreq(:ad_account_id) + kw(%i[type]),
+    shared_budgets: keyreq(:ad_account_id),
+    bid_strategies: keyreq(:ad_account_id),
+    ad_schedule: keyreq(:ad_account_id, :external_campaign_id),
+    labels: keyreq(:ad_account_id),
+    local_services_leads: keyreq(:ad_account_id) + kw(%i[since])
+  }
+}.freeze
+
+def check_ads_parity_surface(ads)
+  count = 2 # bulk_status and duplicate on ads itself
+  ADS_PARITY_SURFACE.each do |sub, methods|
+    namespace = ads.public_send(sub)
+    ok(!namespace.nil?, "client.ads.#{sub} exists")
+    methods.each do |method_name, expected_params|
+      actual = namespace.method(method_name).parameters.map { |kind, name| [kind, name] }
+      ok(
+        actual == expected_params,
+        "client.ads.#{sub}.#{method_name} params match (#{actual.inspect} vs #{expected_params.inspect})"
+      )
+      count += 1
+    end
+    public_methods = namespace.class.public_instance_methods(false).sort
+    ok(public_methods == methods.keys.sort, "client.ads.#{sub} has exactly the listed methods")
+  end
+  ok(count == 108, "108 parity methods (one per route of adsParity.js)")
+end
+
 def check_client_surface
   puts "Client surface:"
   client = OmniSocials::Client.new(api_key: "omsk_test_x")
@@ -223,6 +410,10 @@ def check_client_surface
     end
   end
 
+  ok(
+    !client.ads.respond_to?(:create),
+    "client.ads.create is gone (POST /ads/campaigns was removed: use ads.drafts.create)"
+  )
   drafts = client.ads.drafts
   ok(drafts.is_a?(OmniSocials::Resources::AdDrafts), "client.ads.drafts exists")
   EXPECTED_DRAFTS_SURFACE.each do |method_name, expected_params|
@@ -233,6 +424,8 @@ def check_client_surface
       "(#{actual.inspect} vs #{expected_params.inspect})"
     )
   end
+
+  check_ads_parity_surface(client.ads)
 
   ok(client.respond_to?(:health), "client.health exists")
   ok(client.method(:health).parameters.empty?, "client.health takes no args")
@@ -386,6 +579,28 @@ def check_body_building
     fake.last.method == "GET" && fake.last.path == "/posts/42/approval",
     "posts.get_approval GETs /posts/42/approval"
   )
+
+  posts.approve("42")
+  ok(
+    fake.last.method == "POST" && fake.last.path == "/posts/42/approve" && fake.last.json.nil?,
+    "posts.approve without step_order sends no body"
+  )
+  posts.approve("42", step_order: 2)
+  ok(fake.last.json == { "step_order" => 2 }, "posts.approve sends step_order")
+  posts.reject("42")
+  ok(
+    fake.last.path == "/posts/42/reject" && fake.last.json.nil?,
+    "posts.reject without arguments sends no body"
+  )
+  posts.reject("42", comment: "Wrong CTA link")
+  ok(fake.last.json == { "comment" => "Wrong CTA link" }, "posts.reject sends comment alone")
+  posts.reject("42", comment: "Wrong CTA link", step_order: 2)
+  ok(
+    fake.last.json == { "comment" => "Wrong CTA link", "step_order" => 2 },
+    "posts.reject sends comment and step_order"
+  )
+  posts.reject("42", step_order: 3)
+  ok(fake.last.json == { "step_order" => 3 }, "posts.reject sends step_order alone")
 
   media = OmniSocials::Resources::Media.new(fake)
   media.update("1001", name: "renamed")
@@ -730,6 +945,97 @@ def check_ads_bodies(fake)
       OmniSocials::Internal.serialize_query(fake.last.query) == { "status" => "active", "limit" => "5" },
     "ads.list sends only the given filters"
   )
+
+  check_ads_parity_bodies(ads, fake)
+end
+
+def check_ads_parity_bodies(ads, fake)
+  ads.objects.tree(3, from: "2026-10-01", status: %w[active paused], limit: 10)
+  ok(
+    fake.last.method == "GET" && fake.last.path == "/ads/accounts/3/tree" &&
+      OmniSocials::Internal.serialize_query(fake.last.query) ==
+        { "from" => "2026-10-01", "status" => "active,paused", "limit" => "10" } &&
+      fake.last.retry_on.nil?,
+    "ads.objects.tree sends from and a comma status list, normal retries"
+  )
+  ads.objects.update(3, "ad_set", "238", name: "Autumn", end_at: nil)
+  ok(
+    fake.last.method == "PATCH" && fake.last.path == "/ads/accounts/3/objects/ad_set/238" &&
+      fake.last.json == { "name" => "Autumn", "end_at" => nil } && fake.last.retry_on == :rate_limit,
+    "ads.objects.update sends end_at: nil as null and retries a 429 only"
+  )
+  ads.objects.set_status(3, "campaign", "120", status: "active", confirm_budget_amount: 20)
+  ok(
+    fake.last.method == "PUT" && fake.last.path == "/ads/accounts/3/objects/campaign/120/status" &&
+      fake.last.json == { "status" => "active", "confirm_budget_amount" => 20 } &&
+      fake.last.retry_on == :rate_limit,
+    "ads.objects.set_status PUTs the status and the amount, a 429 only"
+  )
+  ads.audiences.remove_members("aud 1", ad_account_id: 3, schema: ["email"], rows: [["fake-hash-1"]])
+  ok(
+    fake.last.method == "DELETE" && fake.last.path == "/ads/audiences/aud%201/members" &&
+      fake.last.json == { "ad_account_id" => 3, "schema" => ["email"], "rows" => [["fake-hash-1"]] },
+    "ads.audiences.remove_members sends DELETE with a body"
+  )
+  ads.media.delete("v9", ad_account_id: 3, type: "video")
+  ok(
+    fake.last.method == "DELETE" && fake.last.json.nil? &&
+      OmniSocials::Internal.serialize_query(fake.last.query) == { "ad_account_id" => "3", "type" => "video" },
+    "ads.media.delete sends ad_account_id and type in the query"
+  )
+  ads.reach_frequency.create(ad_account_id: 3, objective: "awareness", targeting: { "countries" => ["NL"] },
+                             start_at: "2026-12-01T00:00:00Z", end_at: "2026-12-14T00:00:00Z",
+                             reach: 200_000, frequency_cap: 2)
+  ok(
+    fake.last.path == "/ads/reach-frequency" && fake.last.json == {
+      "ad_account_id" => 3, "objective" => "awareness", "targeting" => { "countries" => ["NL"] },
+      "start_at" => "2026-12-01T00:00:00Z", "end_at" => "2026-12-14T00:00:00Z",
+      "reach" => 200_000, "frequency_cap" => 2
+    },
+    "ads.reach_frequency.create sends the prediction fields"
+  )
+  ads.accounts.update_settings(3, spend_cap: nil, confirm_budget_amount: "remove")
+  ok(
+    fake.last.json == { "spend_cap" => nil, "confirm_budget_amount" => "remove" } &&
+      fake.last.retry_on == :rate_limit,
+    "ads.accounts.update_settings removes the cap with an explicit null"
+  )
+  ads.leads.list(since: "2026-10-01T00:00:00Z", until_time: "2026-10-31T00:00:00Z")
+  ok(
+    OmniSocials::Internal.serialize_query(fake.last.query) ==
+      { "since" => "2026-10-01T00:00:00Z", "until" => "2026-10-31T00:00:00Z" },
+    "ads.leads.list sends until_time as until"
+  )
+  ads.lead_forms.create(
+    ad_account_id: 3, name: "Quote", privacy_policy_url: "https://example.com/privacy",
+    questions: [{ "type" => "email" }], thank_you: { "title" => "Thanks" }, accept_terms: true
+  )
+  ok(fake.last.json["accept_terms"] == true, "ads.lead_forms.create sends accept_terms")
+  ads.audiences.create(ad_account_id: 3, name: "Buyers", customer_file_source: "user_provided",
+                       schema: ["email"], rows: [["fake-hash-2"]])
+  ok(
+    fake.last.json == {
+      "ad_account_id" => 3, "name" => "Buyers", "customer_file_source" => "user_provided",
+      "schema" => ["email"], "rows" => [["fake-hash-2"]]
+    },
+    "ads.audiences.create sends the first members"
+  )
+  ads.update(7, objective: "lead_generation", settings: { "lead_form_id" => "lf-1" })
+  ok(
+    fake.last.method == "PATCH" && fake.last.path == "/ads/campaigns/7" &&
+      fake.last.json == { "objective" => "lead_generation", "settings" => { "lead_form_id" => "lf-1" } },
+    "ads.update sends the objective and settings of a draft"
+  )
+  ads.rules.create(name: "Pause losers", conditions: [{ "metric" => "cpc", "op" => "gt", "value" => 3 }],
+                   action: { "type" => "pause" })
+  ok(fake.last.retry_on == :rate_limit, "ads.rules.create retries a 429 only")
+  ads.budget_schedules.create(7, start_at: "2026-11-27T00:00:00Z", end_at: "2026-11-30T00:00:00Z",
+                                 budget_increase: { "type" => "absolute", "value" => 30 },
+                                 confirm_budget_amount: 30)
+  ok(
+    fake.last.path == "/ads/campaigns/7/budget-schedules" && fake.last.retry_on == :rate_limit,
+    "ads.budget_schedules.create retries a 429 only"
+  )
 end
 
 # ---------------------------------------------------------------------------
@@ -833,6 +1139,19 @@ def check_webhook_verification
   assert_raises(OmniSocials::WebhookVerificationError, "far-future timestamp raises") do
     OmniSocials::Webhooks.verify(payload: raw_body, signature: future_signature, secret: secret)
   end
+
+  # Secret rotation: for 24 hours a delivery also carries
+  # X-OmniSocials-Signature-Previous, the same scheme signed with the OLD
+  # secret. The new secret fails on it; the old secret verifies it.
+  old_secret = "whsec_test_old_secret"
+  previous_header = build_signature(old_secret, timestamp, raw_body)
+  assert_raises(OmniSocials::WebhookVerificationError, "the new secret does not verify the Previous header") do
+    OmniSocials::Webhooks.verify(payload: raw_body, signature: previous_header, secret: secret)
+  end
+  ok(
+    OmniSocials::Webhooks.verify(payload: raw_body, signature: previous_header, secret: old_secret) == event,
+    "the Previous header verifies with the old secret"
+  )
 
   assert_raises(OmniSocials::WebhookVerificationError, "wrong secret raises") do
     OmniSocials::Webhooks.verify(payload: raw_body, signature: signature, secret: "wrong_secret")
@@ -959,6 +1278,20 @@ def check_live_transport
     ok(requests.length == 1, "404 is not retried")
   end
 
+  # A review that moved on: 409 step_changed keeps current_step_order.
+  with_scripted_server(
+    [http_response(409, '{"error":{"code":"step_changed","message":"The review is on step 2 now.","current_step_order":2}}')]
+  ) do |port, requests|
+    client = OmniSocials::Client.new(api_key: "omsk_test_x", base_url: "http://127.0.0.1:#{port}")
+    err = assert_raises(OmniSocials::APIError, "409 step_changed raises APIError") do
+      client.posts.approve("1024", step_order: 1)
+    end
+    ok(err.status == 409 && err.code == "step_changed" && err.body["error"]["current_step_order"] == 2,
+       "step_changed carries current_step_order in the body")
+    ok(requests[0].include?("POST /posts/1024/approve HTTP/1.1") && requests[0].include?('{"step_order":1}'),
+       "approve sends POST /posts/1024/approve with step_order")
+  end
+
   # 204 returns nil.
   with_scripted_server([http_response(204)]) do |port, requests|
     client = OmniSocials::Client.new(api_key: "omsk_test_x", base_url: "http://127.0.0.1:#{port}")
@@ -1048,7 +1381,26 @@ def check_ads_transport
     "activate" => ->(ads) { ads.activate(7, 25) },
     "activate_multi" => ->(ads) { ads.activate_multi([7, 8], 25) },
     "resume" => ->(ads) { ads.resume(7) },
-    "update" => ->(ads) { ads.update(7, budget: { "amount" => 50, "currency" => "EUR" }, confirm_budget_amount: 50) }
+    "update" => ->(ads) { ads.update(7, budget: { "amount" => 50, "currency" => "EUR" }, confirm_budget_amount: 50) },
+    "objects.update" => lambda { |ads|
+      ads.objects.update(3, "ad_set", "238", budget: { "amount" => 40, "currency" => "EUR" }, confirm_budget_amount: 40)
+    },
+    "objects.set_status" => ->(ads) { ads.objects.set_status(3, "campaign", "120", status: "active", confirm_budget_amount: 20) },
+    "bulk_status" => ->(ads) { ads.bulk_status(campaign_ids: [7, 8], status: "active", confirm_budget_amount: 25) },
+    "campaign_ads.set_status" => ->(ads) { ads.campaign_ads.set_status(7, 51, status: "active", confirm_budget_amount: 25) },
+    "rules.create" => lambda { |ads|
+      ads.rules.create(name: "Scale", conditions: [{ "metric" => "ctr", "op" => "gt", "value" => 2 }],
+                       action: { "type" => "adjust_budget", "percent" => 20, "max_daily_budget" => 50 },
+                       confirm_max_daily_budget: 50)
+    },
+    "rules.update" => ->(ads) { ads.rules.update(4, enabled: true) },
+    "rules.undo" => ->(ads) { ads.rules.undo(9, confirm_budget_amount: 25) },
+    "accounts.update_settings" => ->(ads) { ads.accounts.update_settings(3, spend_cap: 500, confirm_budget_amount: 500) },
+    "reach_frequency.reserve" => ->(ads) { ads.reach_frequency.reserve("rf-1", ad_account_id: 3, confirm_budget_amount: 1000) },
+    "budget_schedules.create" => lambda { |ads|
+      ads.budget_schedules.create(7, start_at: "2026-11-27T00:00:00Z", end_at: "2026-11-30T00:00:00Z",
+                                     budget_increase: { "type" => "absolute", "value" => 30 }, confirm_budget_amount: 30)
+    }
   }
 
   money_calls.each do |name, call|

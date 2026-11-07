@@ -52,7 +52,9 @@ module OmniSocials
       # POST /media/upload-from-url - server-side fetch, up to 1GB.
       #
       # Files over 100MB are streamed in the background: the response has
-      # data["status"] == "processing"; poll get() until it is "ready".
+      # data["status"] == "processing"; poll get() until it is "ready". When
+      # such a file cannot be queued for processing, the answer is 503
+      # "processing_unavailable": send the same request again in a minute.
       def upload_from_url(url:, filename: nil, name: nil, folder: nil, folder_id: nil, pdf_mode: nil)
         body = Internal.drop_nil(
           {

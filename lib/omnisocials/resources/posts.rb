@@ -189,6 +189,12 @@ module OmniSocials
       # most 20; a name that does not exist yet becomes a new tag) to filter
       # and compare posts in Analytics. Tags never go to a platform. Errors:
       # 404 tag_not_found (an unknown id), 400 invalid_tags / too_many_tags.
+      #
+      # A media id that is still processing (a large video is checked and
+      # converted after upload) answers 409 "media_processing" and nothing is
+      # created: wait until media.get(id) says "ready", then send the same
+      # request again. A file whose processing failed answers 400
+      # "invalid_media": upload it again.
       def create(content:, channels: nil, scheduled_at: nil, media_ids: nil,
                  media_urls: nil, type: nil, source: nil, link_url: nil,
                  link_title: nil, link_description: nil, link_thumbnail_url: nil,
@@ -226,7 +232,8 @@ module OmniSocials
       # See #create for the "warnings" array (X link posts, and the
       # "image_fit" entries steered by media_fit), the 402
       # "x_credits_insufficient" credit gate on X link posts,
-      # comment_dm_automation and tags.
+      # comment_dm_automation, tags and the 409 "media_processing" / 400
+      # "invalid_media" answers.
       def create_and_publish(content:, channels: nil, media_ids: nil,
                              media_urls: nil, type: nil, source: nil,
                              link_url: nil, link_title: nil, link_description: nil,
@@ -302,6 +309,15 @@ module OmniSocials
       # tags; tags: nil or tags: [] removes them all, and leaving it out
       # keeps them. An update with only tags works on every post, published
       # and failed ones included.
+      #
+      # 409 answers, where nothing is changed: "post_publishing" while the
+      # post is publishing (status "posting") or a retry publishes one of its
+      # channels (poll #get until "published", "warning" or "failed"; an
+      # update with only tags still works); "review_required" when changes
+      # were requested on the post (approval_status "rejected") and the
+      # update would schedule it (it needs a new review: create it again
+      # with approval_workflow_id; saving it as a draft works);
+      # "media_processing" as on #create.
       def update(post_id, content: nil, scheduled_at: nil, channels: nil,
                  media_ids: nil, media_urls: nil, type: nil, location_id: nil,
                  collaborators: nil, user_tags: nil, pinterest: nil,
@@ -351,14 +367,21 @@ module OmniSocials
         @client.request("PATCH", "/posts/#{post_id}", json: body)
       end
 
-      # DELETE /posts/{id} - remove a post from OmniSocials (the live post stays on the platform). Returns nil (204).
+      # DELETE /posts/{id} - remove a post from OmniSocials (the live post
+      # stays on the platform). Returns nil (204). While the post is
+      # publishing (status "posting") or a retry publishes one of its
+      # channels, the answer is 409 "post_publishing" and nothing is deleted:
+      # poll #get until "published", "warning" or "failed", then delete it.
       def delete(post_id)
         @client.request("DELETE", "/posts/#{post_id}")
       end
 
       # POST /posts/{id}/publish - publish a draft or scheduled post now.
       # See #create for the 402 "x_credits_insufficient" credit gate that
-      # can also refuse publishing a scheduled X link post.
+      # can also refuse publishing a scheduled X link post. A post on which
+      # changes were requested in its approval workflow (approval_status
+      # "rejected") answers 409 "review_required": it publishes only after a
+      # new review (create it again with approval_workflow_id).
       def publish(post_id)
         @client.request("POST", "/posts/#{post_id}/publish")
       end
@@ -369,32 +392,50 @@ module OmniSocials
       # Only the platforms that failed are re-published; platforms that
       # already succeeded are never posted again. Asynchronous: a 200 means
       # the retry is queued - poll `get` for the outcome. Max 3 retries per
-      # platform.
+      # platform. While another retry runs (a second request, the dashboard,
+      # the automatic retry) the answer is 409 "retry_in_progress" and
+      # nothing is queued: poll `get` and retry once the post is "failed" or
+      # "warning" again.
       def retry(post_id)
         @client.request("POST", "/posts/#{post_id}/retry")
       end
 
       # POST /posts/{id}/approve - approve the current step of a post's
       # approval workflow, on behalf of the user who owns this API key. That
-      # user must be a listed approver for the workflow's CURRENT step -
+      # user must be a listed approver for the workflow's CURRENT step:
       # steps approve in order, so an approver on a later step gets a 403
       # "forbidden" error until earlier steps clear. Only works on a post
       # with approval_status "pending". If this is the last step, the post
       # finalizes immediately ("scheduled" or "posting"); otherwise it stays
       # "in_approval" and the next step's approvers are notified.
-      def approve(post_id)
-        @client.request("POST", "/posts/#{post_id}/approve")
+      #
+      # Pass step_order: the "current_step" of #get_approval, the step you
+      # reviewed. When the review is on another step now (somebody decided
+      # since you read it, or a retried call already went through), nothing
+      # is approved and the call raises a 409 OmniSocials::APIError with
+      # code "step_changed"; err.body["error"]["current_step_order"] is the
+      # step the review is on now. Read the approval again before you
+      # decide. Without step_order the call approves whatever step is
+      # current, so a retry after a timeout can approve the next step too.
+      def approve(post_id, step_order: nil)
+        body = step_order.nil? ? nil : { "step_order" => step_order }
+        @client.request("POST", "/posts/#{post_id}/approve", json: body)
       end
 
       # POST /posts/{id}/reject - reject a post's approval workflow, on
       # behalf of the user who owns this API key. Same approver requirement
       # as #approve. Unlike approval, a rejection stops the WHOLE workflow
-      # immediately (not just the current step) - the post's status becomes
-      # "rejected". `comment` is optional and, when given, is shown to the
-      # requester and other approvers in the post's review thread.
-      def reject(post_id, comment: nil)
-        body = comment ? { comment: comment } : nil
-        @client.request("POST", "/posts/#{post_id}/reject", json: body)
+      # immediately (not just the current step): the post's status becomes
+      # "rejected". `comment` is optional (max 2000 characters) and, when
+      # given, is shown to the requester and other approvers in the post's
+      # review thread. `step_order` works as on #approve: when the review
+      # moved on, nothing is rejected and the call raises a 409
+      # "step_changed" error with "current_step_order" in its body.
+      def reject(post_id, comment: nil, step_order: nil)
+        body = {}
+        body["comment"] = comment if comment
+        body["step_order"] = step_order unless step_order.nil?
+        @client.request("POST", "/posts/#{post_id}/reject", json: body.empty? ? nil : body)
       end
 
       # GET /posts/{id}/approval - the approval review of a post: every step
