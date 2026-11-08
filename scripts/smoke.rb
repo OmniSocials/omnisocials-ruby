@@ -26,6 +26,9 @@
 #   limit in the error body
 # - ads calls send the right method, path and body; a call that can start ad
 #   spend is sent once after a 502 or a lost connection, a read is retried
+# - accounts.update sends only the x_statistics keys given (nil is sent as
+#   null), analytics.refresh_post is sent once after a 502 or a lost
+#   connection and retried after a 429, and credits.get GETs /credits
 # - every id goes into the request path as one percent-encoded segment, so an
 #   id with "/", "?", "#" or ".." cannot reach another endpoint, and an id of
 #   "", "." or ".." raises ArgumentError before anything is sent
@@ -128,10 +131,15 @@ EXPECTED_SURFACE = {
   },
   accounts: {
     list: [],
-    get: [[:req, :account_id]]
+    get: [[:req, :account_id]],
+    update: [[:req, :account_id], [:keyreq, :x_statistics]]
+  },
+  credits: {
+    get: []
   },
   analytics: {
     post: [[:req, :post_id]],
+    refresh_post: [[:req, :post_id]],
     posts: [[:req, :ids]],
     overview: kw(%i[period start_date end_date tag]),
     accounts: kw(%i[platform date]),
@@ -1548,11 +1556,79 @@ def check_path_segments
   end
 end
 
+# ---------------------------------------------------------------------------
+# X statistics on credits: accounts.update, analytics.refresh_post, credits.get
+# ---------------------------------------------------------------------------
+
+def check_x_statistics_transport
+  puts "X statistics on credits (fake transport and scripted loopback server):"
+  fake = FakeTransport.new
+  accounts = OmniSocials::Resources::Accounts.new(fake)
+  accounts.update("1234_x", x_statistics: { posts: "light", followers: "daily" })
+  ok(
+    fake.last.method == "PATCH" && fake.last.path == "/accounts/1234_x" &&
+      JSON.generate(fake.last.json) == '{"x_statistics":{"posts":"light","followers":"daily"}}',
+    "accounts.update PATCHes /accounts/{id} with x_statistics"
+  )
+  accounts.update("1234_x", x_statistics: { "followers" => "off" })
+  ok(JSON.generate(fake.last.json) == '{"x_statistics":{"followers":"off"}}', "accounts.update sends only the keys given")
+  schedule = { "at" => %w[1h 1d], "then_every" => "7d", "until" => "90d" }
+  accounts.update("1234_x", x_statistics: { "posts" => "custom", "post_schedule" => schedule })
+  ok(fake.last.json["x_statistics"]["post_schedule"] == schedule, "accounts.update sends post_schedule")
+  accounts.update("1234_x", x_statistics: nil)
+  ok(JSON.generate(fake.last.json) == '{"x_statistics":null}', "accounts.update(x_statistics: nil) sends null")
+
+  analytics = OmniSocials::Resources::Analytics.new(fake)
+  analytics.refresh_post(9123)
+  ok(
+    fake.last.method == "POST" && fake.last.path == "/analytics/posts/9123/refresh" &&
+      fake.last.json.nil? && fake.last.retry_on == :rate_limit,
+    "analytics.refresh_post POSTs /analytics/posts/{id}/refresh, retried on a 429 only"
+  )
+  OmniSocials::Resources::Credits.new(fake).get
+  ok(fake.last.method == "GET" && fake.last.path == "/credits", "credits.get GETs /credits")
+
+  bad_gateway = http_response(
+    502, '{"error":{"code":"refresh_failed","message":"X did not answer"}}', { "Retry-After" => "0" }
+  )
+  with_scripted_server([bad_gateway]) do |port, requests|
+    assert_raises(OmniSocials::ServerError, "analytics.refresh_post raises ServerError on a 502") do
+      ads_client(port).analytics.refresh_post(9123)
+    end
+    ok(
+      requests.length == 1 && requests[0].start_with?("POST /analytics/posts/9123/refresh HTTP/1.1"),
+      "analytics.refresh_post after a 502 is sent exactly once"
+    )
+  end
+  with_scripted_server([:drop]) do |port, requests|
+    assert_raises(OmniSocials::APIConnectionError, "a lost connection on analytics.refresh_post raises") do
+      ads_client(port).analytics.refresh_post(9123)
+    end
+    ok(requests.length == 1, "analytics.refresh_post after a lost connection is sent exactly once")
+  end
+  with_scripted_server(
+    [http_response(429, '{"error":{"code":"rate_limited"}}', { "Retry-After" => "0" }),
+     http_response(200, '{"data":{"post_id":9123,"tweets":[],"credits_used":0.5}}')]
+  ) do |port, requests|
+    result = ads_client(port).analytics.refresh_post(9123)
+    ok(requests.length == 2 && result["data"]["credits_used"] == 0.5, "analytics.refresh_post after a 429 is retried")
+  end
+  with_scripted_server([http_response(200, '{"data":{"id":"1234_x"}}')]) do |port, requests|
+    ads_client(port).accounts.update("1234_x", x_statistics: nil)
+    ok(
+      requests[0].start_with?("PATCH /accounts/1234_x HTTP/1.1") &&
+        requests[0].end_with?('{"x_statistics":null}'),
+      "accounts.update sends PATCH /accounts/1234_x with x_statistics null"
+    )
+  end
+end
+
 check_client_surface
 check_construction_guards
 check_body_building
 check_webhook_verification
 check_live_transport
+check_x_statistics_transport
 check_path_segments
 
 puts "\nAll #{$checks} checks passed."

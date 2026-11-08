@@ -61,7 +61,7 @@ module OmniSocials
 
     attr_reader :api_key, :base_url, :timeout, :max_retries,
                 :posts, :media, :folders, :hashtag_sets, :approval_workflows,
-                :accounts, :analytics, :audio, :locations, :pinterest,
+                :accounts, :analytics, :credits, :audio, :locations, :pinterest,
                 :automations, :ads, :inbox, :webhooks, :tags,
                 :limits, :feature_requests
 
@@ -96,6 +96,7 @@ module OmniSocials
       @approval_workflows = Resources::ApprovalWorkflows.new(self)
       @accounts = Resources::Accounts.new(self)
       @analytics = Resources::Analytics.new(self)
+      @credits = Resources::Credits.new(self)
       @audio = Resources::Audio.new(self)
       @locations = Resources::Locations.new(self)
       @pinterest = Resources::Pinterest.new(self)

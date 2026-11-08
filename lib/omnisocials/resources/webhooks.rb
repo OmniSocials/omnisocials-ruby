@@ -7,7 +7,8 @@ module OmniSocials
     # ad.status_changed, ad.created, ad.updated, ad.review,
     # ad.delivery_issue, campaign.created, campaign.updated,
     # campaign.budget, lead.received, ads.sync_failed, ads.sync_recovered,
-    # ads.initial_sync_completed and ad_rule.triggered).
+    # ads.initial_sync_completed and ad_rule.triggered, and for X
+    # statistics x_statistics.paused and x_statistics.resumed).
     #
     # For verifying incoming deliveries, see OmniSocials::Webhooks.verify.
     class Webhooks
@@ -42,7 +43,11 @@ module OmniSocials
       # ad.updated, ad.review, ad.delivery_issue, campaign.created,
       # campaign.updated, campaign.budget, lead.received, ads.sync_failed,
       # ads.sync_recovered, ads.initial_sync_completed and
-      # ad_rule.triggered. The `data` of an ad.status_changed delivery is
+      # ad_rule.triggered, and x_statistics.paused / x_statistics.resumed
+      # (the organisation's X statistics stopped at 0 credits or started
+      # again after a top-up, one delivery per workspace with X; `data` is
+      # { workspace_id, account_id, reason }, reason insufficient_credits or
+      # credits_added). The `data` of an ad.status_changed delivery is
       # the campaign, not a post: campaign_id, workspace_id, name, platform,
       # campaign_type, status, previous_status, external_campaign_id and
       # budget; the other ads events carry the campaign (plus "details") or
