@@ -43,7 +43,7 @@ module OmniSocials
 
       # GET /posts/{id} - fetch a single post.
       def get(post_id)
-        @client.request("GET", "/posts/#{post_id}")
+        @client.request("GET", "/posts/#{Internal.path_segment(post_id)}")
       end
 
       # GET /posts/recent-platform - recent posts fetched live from the
@@ -364,7 +364,7 @@ module OmniSocials
         body["discord"] = discord unless discord.is_a?(NotGiven)
         # And for tags: an explicit nil (or []) removes every tag of the post.
         body["tags"] = tags unless tags.is_a?(NotGiven)
-        @client.request("PATCH", "/posts/#{post_id}", json: body)
+        @client.request("PATCH", "/posts/#{Internal.path_segment(post_id)}", json: body)
       end
 
       # DELETE /posts/{id} - remove a post from OmniSocials (the live post
@@ -373,7 +373,7 @@ module OmniSocials
       # channels, the answer is 409 "post_publishing" and nothing is deleted:
       # poll #get until "published", "warning" or "failed", then delete it.
       def delete(post_id)
-        @client.request("DELETE", "/posts/#{post_id}")
+        @client.request("DELETE", "/posts/#{Internal.path_segment(post_id)}")
       end
 
       # POST /posts/{id}/publish - publish a draft or scheduled post now.
@@ -383,7 +383,7 @@ module OmniSocials
       # "rejected") answers 409 "review_required": it publishes only after a
       # new review (create it again with approval_workflow_id).
       def publish(post_id)
-        @client.request("POST", "/posts/#{post_id}/publish")
+        @client.request("POST", "/posts/#{Internal.path_segment(post_id)}/publish")
       end
 
       # POST /posts/{id}/retry - retry the failed platforms of a "failed" or
@@ -397,7 +397,7 @@ module OmniSocials
       # nothing is queued: poll `get` and retry once the post is "failed" or
       # "warning" again.
       def retry(post_id)
-        @client.request("POST", "/posts/#{post_id}/retry")
+        @client.request("POST", "/posts/#{Internal.path_segment(post_id)}/retry")
       end
 
       # POST /posts/{id}/approve - approve the current step of a post's
@@ -419,7 +419,7 @@ module OmniSocials
       # current, so a retry after a timeout can approve the next step too.
       def approve(post_id, step_order: nil)
         body = step_order.nil? ? nil : { "step_order" => step_order }
-        @client.request("POST", "/posts/#{post_id}/approve", json: body)
+        @client.request("POST", "/posts/#{Internal.path_segment(post_id)}/approve", json: body)
       end
 
       # POST /posts/{id}/reject - reject a post's approval workflow, on
@@ -435,7 +435,7 @@ module OmniSocials
         body = {}
         body["comment"] = comment if comment
         body["step_order"] = step_order unless step_order.nil?
-        @client.request("POST", "/posts/#{post_id}/reject", json: body.empty? ? nil : body)
+        @client.request("POST", "/posts/#{Internal.path_segment(post_id)}/reject", json: body.empty? ? nil : body)
       end
 
       # GET /posts/{id}/approval - the approval review of a post: every step
@@ -451,7 +451,7 @@ module OmniSocials
       # and empty steps and comments. Read-only; requires the posts:read
       # scope.
       def get_approval(post_id)
-        @client.request("GET", "/posts/#{post_id}/approval")
+        @client.request("GET", "/posts/#{Internal.path_segment(post_id)}/approval")
       end
 
       private

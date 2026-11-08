@@ -54,7 +54,7 @@ module OmniSocials
       # GET /feature-requests/{id} - one request with its status and the
       # team's replies. Errors: 400 invalid_id, 404 not_found.
       def get(request_id)
-        @client.request("GET", "/feature-requests/#{request_id}")
+        @client.request("GET", "/feature-requests/#{Internal.path_segment(request_id)}")
       end
     end
   end

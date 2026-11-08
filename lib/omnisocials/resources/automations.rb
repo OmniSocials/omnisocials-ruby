@@ -35,7 +35,7 @@ module OmniSocials
       # GET /automations/{id} - fetch a single automation. Requires the
       # automations:read scope (opt-in on the API key).
       def get(automation_id)
-        @client.request("GET", "/automations/#{automation_id}")
+        @client.request("GET", "/automations/#{Internal.path_segment(automation_id)}")
       end
 
       # POST /automations - create a comment-to-DM automation.
@@ -131,13 +131,13 @@ module OmniSocials
           trigger: trigger, actions: actions, limits: limits, status: status,
           platform: platform, facebook_post_id: facebook_post_id
         )
-        @client.request("PATCH", "/automations/#{automation_id}", json: body)
+        @client.request("PATCH", "/automations/#{Internal.path_segment(automation_id)}", json: body)
       end
 
       # DELETE /automations/{id} - delete an automation. Returns nil (204).
       # Requires the automations:write scope.
       def delete(automation_id)
-        @client.request("DELETE", "/automations/#{automation_id}")
+        @client.request("DELETE", "/automations/#{Internal.path_segment(automation_id)}")
       end
 
       # GET /automations/{id}/events - the automation's activity: one event
@@ -154,7 +154,9 @@ module OmniSocials
       # events is left out). Each event carries kind ("comment", "dm",
       # "story_reply"), outcome, reason / reason_label (X adds the skip
       # reasons "dms_closed", "no_credits", "opted_out" and
-      # "automation_off"; Follow first adds "already_waiting"), person (id,
+      # "automation_off"; Follow first adds "already_waiting";
+      # "plan_inactive" = the organisation had no active plan or trial, so
+      # nothing was sent), person (id,
       # username; on Facebook the person's name, since Facebook has no
       # @handle), trigger_id, trigger_text, message (the DM sent),
       # public_reply, platform_message_id, follow_gate (Follow first:
@@ -162,7 +164,7 @@ module OmniSocials
       # "checked", "after_ask" }, else nil), created_at and sent_at.
       def list_events(automation_id, outcome: nil, limit: nil, offset: nil)
         @client.request(
-          "GET", "/automations/#{automation_id}/events",
+          "GET", "/automations/#{Internal.path_segment(automation_id)}/events",
           query: { "outcome" => outcome, "limit" => limit, "offset" => offset }
         )
       end

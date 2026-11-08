@@ -51,13 +51,13 @@ module OmniSocials
       # 409 tag_exists.
       def update(tag_id, name: nil, color: nil)
         body = Internal.drop_nil({ "name" => name, "color" => color })
-        @client.request("PATCH", "/tags/#{tag_id}", json: body)
+        @client.request("PATCH", "/tags/#{Internal.path_segment(tag_id)}", json: body)
       end
 
       # DELETE /tags/{id} - delete a tag and take it off every post (the
       # posts stay). Returns { "data" => { "tag", "posts_untagged" } }.
       def delete(tag_id)
-        @client.request("DELETE", "/tags/#{tag_id}")
+        @client.request("DELETE", "/tags/#{Internal.path_segment(tag_id)}")
       end
 
       # POST /tags/apply - add, remove or replace the tags of up to 500 posts

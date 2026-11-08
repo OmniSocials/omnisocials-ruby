@@ -154,7 +154,9 @@ module OmniSocials
     private
 
     def build_uri(path, query)
-      uri = URI.parse("#{base_url}#{path}")
+      # Every id in path was encoded with Internal.path_segment; this refuses
+      # an id of "", "." or ".." before the request is sent.
+      uri = URI.parse("#{base_url}#{Internal.check_path(path)}")
       pairs = Internal.serialize_query(query)
       uri.query = URI.encode_www_form(pairs) if pairs
       uri

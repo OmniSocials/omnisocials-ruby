@@ -10,7 +10,7 @@ module OmniSocials
 
       # GET /analytics/posts/{id} - latest per-platform metrics for one post.
       def post(post_id)
-        @client.request("GET", "/analytics/posts/#{post_id}")
+        @client.request("GET", "/analytics/posts/#{Internal.path_segment(post_id)}")
       end
 
       # GET /analytics/posts?ids=a,b,c - bulk metrics for up to 100 posts in

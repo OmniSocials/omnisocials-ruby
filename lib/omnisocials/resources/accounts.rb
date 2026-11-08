@@ -18,7 +18,7 @@ module OmniSocials
 
       # GET /accounts/{id} - fetch a single connected account.
       def get(account_id)
-        @client.request("GET", "/accounts/#{account_id}")
+        @client.request("GET", "/accounts/#{Internal.path_segment(account_id)}")
       end
     end
   end

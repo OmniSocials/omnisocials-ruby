@@ -24,7 +24,7 @@ module OmniSocials
 
       # GET /media/{id} - fetch a single library file.
       def get(media_id)
-        @client.request("GET", "/media/#{media_id}")
+        @client.request("GET", "/media/#{Internal.path_segment(media_id)}")
       end
 
       # POST /media/upload - multipart upload (max 100MB inline).
@@ -130,7 +130,7 @@ module OmniSocials
       def update(media_id, name: nil, folder_id: OmniSocials::NOT_GIVEN)
         body = Internal.drop_nil({ "name" => name })
         body["folder_id"] = folder_id unless folder_id.is_a?(NotGiven)
-        @client.request("PATCH", "/media/#{media_id}", json: body)
+        @client.request("PATCH", "/media/#{Internal.path_segment(media_id)}", json: body)
       end
 
       # DELETE /media/{id} - delete a file. Returns nil (204).
@@ -138,7 +138,7 @@ module OmniSocials
       # Fails with 409 media_in_use if the file is attached to a scheduled or
       # publishing post.
       def delete(media_id)
-        @client.request("DELETE", "/media/#{media_id}")
+        @client.request("DELETE", "/media/#{Internal.path_segment(media_id)}")
       end
     end
   end

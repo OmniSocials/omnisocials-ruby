@@ -16,7 +16,7 @@ module OmniSocials
 
       # GET /hashtag-sets/{id} - fetch a single hashtag set.
       def get(hashtag_set_id)
-        @client.request("GET", "/hashtag-sets/#{hashtag_set_id}")
+        @client.request("GET", "/hashtag-sets/#{Internal.path_segment(hashtag_set_id)}")
       end
 
       # POST /hashtag-sets - create a hashtag set.
@@ -36,12 +36,12 @@ module OmniSocials
       # `hashtags` replaces the FULL list.
       def update(hashtag_set_id, name: nil, hashtags: nil)
         body = Internal.drop_nil({ "name" => name, "hashtags" => hashtags })
-        @client.request("PATCH", "/hashtag-sets/#{hashtag_set_id}", json: body)
+        @client.request("PATCH", "/hashtag-sets/#{Internal.path_segment(hashtag_set_id)}", json: body)
       end
 
       # DELETE /hashtag-sets/{id} - delete a hashtag set. Returns nil (204).
       def delete(hashtag_set_id)
-        @client.request("DELETE", "/hashtag-sets/#{hashtag_set_id}")
+        @client.request("DELETE", "/hashtag-sets/#{Internal.path_segment(hashtag_set_id)}")
       end
     end
   end

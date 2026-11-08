@@ -26,7 +26,7 @@ module OmniSocials
       def update(folder_id, name: nil, parent_id: OmniSocials::NOT_GIVEN)
         body = Internal.drop_nil({ "name" => name })
         body["parent_id"] = parent_id unless parent_id.is_a?(NotGiven)
-        @client.request("PATCH", "/folders/#{folder_id}", json: body)
+        @client.request("PATCH", "/folders/#{Internal.path_segment(folder_id)}", json: body)
       end
 
       # DELETE /folders/{id} - delete a folder. Returns nil (204).
@@ -34,7 +34,7 @@ module OmniSocials
       # The folder's media is NOT deleted: files move to the root and
       # subfolders move up to the deleted folder's parent.
       def delete(folder_id)
-        @client.request("DELETE", "/folders/#{folder_id}")
+        @client.request("DELETE", "/folders/#{Internal.path_segment(folder_id)}")
       end
     end
   end

@@ -31,7 +31,7 @@ module OmniSocials
       # GET /webhooks/{id} - fetch a webhook of the key's workspace, or an
       # organisation-wide webhook of its organisation ("workspace_id" nil).
       def get(webhook_id)
-        @client.request("GET", "/webhooks/#{webhook_id}")
+        @client.request("GET", "/webhooks/#{Internal.path_segment(webhook_id)}")
       end
 
       # POST /webhooks - create a webhook subscription.
@@ -63,7 +63,12 @@ module OmniSocials
       # Works on organisation-wide webhooks too. is_active: true switches on
       # a webhook that was switched off (also an automatic switch-off);
       # setting url, events or switching it on makes the key's creator the
-      # person behind the webhook.
+      # person behind the webhook. Setting url on an organisation-wide
+      # webhook (even its current one) moves it to the key's workspace: from
+      # then on it gets only that workspace's events, and the answer shows
+      # the new workspace_id. When the webhook has Ads events after the
+      # change, setting url or events or switching it on needs ads:read and
+      # access_ads (403 otherwise, nothing changed).
       def update(webhook_id, url: nil, events: nil, is_active: nil)
         body = Internal.drop_nil(
           {
@@ -72,13 +77,13 @@ module OmniSocials
             "is_active" => is_active
           }
         )
-        @client.request("PATCH", "/webhooks/#{webhook_id}", json: body)
+        @client.request("PATCH", "/webhooks/#{Internal.path_segment(webhook_id)}", json: body)
       end
 
       # DELETE /webhooks/{id} - delete a webhook of the key's workspace or
       # an organisation-wide webhook of its organisation. Returns nil (204).
       def delete(webhook_id)
-        @client.request("DELETE", "/webhooks/#{webhook_id}")
+        @client.request("DELETE", "/webhooks/#{Internal.path_segment(webhook_id)}")
       end
 
       # POST /webhooks/{id}/rotate-secret - rotate the signing secret.
@@ -93,7 +98,7 @@ module OmniSocials
       # replaces the previous secret with the one just rotated out. Works on
       # organisation-wide webhooks too.
       def rotate_secret(webhook_id)
-        @client.request("POST", "/webhooks/#{webhook_id}/rotate-secret")
+        @client.request("POST", "/webhooks/#{Internal.path_segment(webhook_id)}/rotate-secret")
       end
     end
   end

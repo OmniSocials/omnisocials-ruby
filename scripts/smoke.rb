@@ -26,6 +26,9 @@
 #   limit in the error body
 # - ads calls send the right method, path and body; a call that can start ad
 #   spend is sent once after a 502 or a lost connection, a read is retried
+# - every id goes into the request path as one percent-encoded segment, so an
+#   id with "/", "?", "#" or ".." cannot reach another endpoint, and an id of
+#   "", "." or ".." raises ArgumentError before anything is sent
 
 require "json"
 require "openssl"
@@ -1454,10 +1457,102 @@ def check_ads_transport
   end
 end
 
+# ---------------------------------------------------------------------------
+# 6. Path segments: a caller-supplied id stays inside one encoded segment
+# ---------------------------------------------------------------------------
+
+# Every method that puts a caller-supplied id into the request path:
+# [resource class, method, HTTP method, path before the id, path after the id].
+ID_PATHS = [
+  [OmniSocials::Resources::Accounts, :get, "GET", "/accounts/", ""],
+  [OmniSocials::Resources::Analytics, :post, "GET", "/analytics/posts/", ""],
+  [OmniSocials::Resources::FeatureRequests, :get, "GET", "/feature-requests/", ""],
+  [OmniSocials::Resources::Folders, :update, "PATCH", "/folders/", ""],
+  [OmniSocials::Resources::Folders, :delete, "DELETE", "/folders/", ""],
+  [OmniSocials::Resources::HashtagSets, :get, "GET", "/hashtag-sets/", ""],
+  [OmniSocials::Resources::HashtagSets, :update, "PATCH", "/hashtag-sets/", ""],
+  [OmniSocials::Resources::HashtagSets, :delete, "DELETE", "/hashtag-sets/", ""],
+  [OmniSocials::Resources::Media, :get, "GET", "/media/", ""],
+  [OmniSocials::Resources::Media, :update, "PATCH", "/media/", ""],
+  [OmniSocials::Resources::Media, :delete, "DELETE", "/media/", ""],
+  [OmniSocials::Resources::Tags, :update, "PATCH", "/tags/", ""],
+  [OmniSocials::Resources::Tags, :delete, "DELETE", "/tags/", ""],
+  [OmniSocials::Resources::Webhooks, :get, "GET", "/webhooks/", ""],
+  [OmniSocials::Resources::Webhooks, :update, "PATCH", "/webhooks/", ""],
+  [OmniSocials::Resources::Webhooks, :delete, "DELETE", "/webhooks/", ""],
+  [OmniSocials::Resources::Webhooks, :rotate_secret, "POST", "/webhooks/", "/rotate-secret"],
+  [OmniSocials::Resources::Posts, :get, "GET", "/posts/", ""],
+  [OmniSocials::Resources::Posts, :update, "PATCH", "/posts/", ""],
+  [OmniSocials::Resources::Posts, :delete, "DELETE", "/posts/", ""],
+  [OmniSocials::Resources::Posts, :publish, "POST", "/posts/", "/publish"],
+  [OmniSocials::Resources::Posts, :retry, "POST", "/posts/", "/retry"],
+  [OmniSocials::Resources::Posts, :approve, "POST", "/posts/", "/approve"],
+  [OmniSocials::Resources::Posts, :reject, "POST", "/posts/", "/reject"],
+  [OmniSocials::Resources::Posts, :get_approval, "GET", "/posts/", "/approval"],
+  [OmniSocials::Resources::Automations, :get, "GET", "/automations/", ""],
+  [OmniSocials::Resources::Automations, :update, "PATCH", "/automations/", ""],
+  [OmniSocials::Resources::Automations, :delete, "DELETE", "/automations/", ""],
+  [OmniSocials::Resources::Automations, :list_events, "GET", "/automations/", "/events"],
+  [OmniSocials::Resources::Inbox, :mark_read, "POST", "/inbox/conversations/", "/read"]
+].freeze
+
+# An id an integrator might pass on from its own users. Unencoded, "/" adds
+# segments, ".." climbs out of /posts and "#" cuts off the rest of the path:
+# posts.publish(HOSTILE_ID) would POST /webhooks/wh_fake/rotate-secret.
+HOSTILE_ID = "../webhooks/wh_fake/rotate-secret#"
+HOSTILE_SEGMENT = "..%2Fwebhooks%2Fwh_fake%2Frotate-secret%23"
+
+def check_path_segments
+  puts "Path segments (fake transport):"
+  fake = FakeTransport.new
+  ID_PATHS.each do |klass, name, verb, before, after|
+    klass.new(fake).public_send(name, HOSTILE_ID)
+    ok(
+      fake.last.method == verb && fake.last.path == "#{before}#{HOSTILE_SEGMENT}#{after}",
+      "#{klass.name.split("::").last}##{name} keeps a hostile id inside one segment of #{before}{id}#{after}"
+    )
+  end
+
+  posts = OmniSocials::Resources::Posts.new(fake)
+  [["a b", "a%20b"], ["x?y=1", "x%3Fy%3D1"], ["50%", "50%25"], [42, "42"]].each do |value, encoded|
+    posts.get(value)
+    ok(fake.last.path == "/posts/#{encoded}", "posts.get(#{value.inspect}) sends /posts/#{encoded}")
+  end
+
+  puts "Path segments (scripted loopback server):"
+  with_scripted_server([http_response(200, '{"data":{"ok":true}}')]) do |port, requests|
+    client = OmniSocials::Client.new(api_key: "omsk_test_x", base_url: "http://127.0.0.1:#{port}")
+    client.posts.publish(HOSTILE_ID)
+    ok(
+      requests[0].start_with?("POST /posts/#{HOSTILE_SEGMENT}/publish HTTP/1.1"),
+      "posts.publish sends POST /posts/{encoded id}/publish, not /webhooks/.../rotate-secret"
+    )
+  end
+
+  # Port 9 is closed: an id that is refused raises ArgumentError before any
+  # connection; one that is sent would raise APIConnectionError instead.
+  client = OmniSocials::Client.new(api_key: "omsk_test_x", base_url: "http://127.0.0.1:9", max_retries: 0)
+  ["", ".", ".."].each do |bad|
+    assert_raises(ArgumentError, "posts.delete(#{bad.inspect}) raises ArgumentError before sending") do
+      client.posts.delete(bad)
+    end
+    assert_raises(ArgumentError, "webhooks.rotate_secret(#{bad.inspect}) raises ArgumentError") do
+      client.webhooks.rotate_secret(bad)
+    end
+    assert_raises(ArgumentError, "inbox.mark_read(#{bad.inspect}) raises ArgumentError") do
+      client.inbox.mark_read(bad)
+    end
+    assert_raises(ArgumentError, "ads.get(#{bad.inspect}) raises ArgumentError") do
+      client.ads.get(bad)
+    end
+  end
+end
+
 check_client_surface
 check_construction_guards
 check_body_building
 check_webhook_verification
 check_live_transport
+check_path_segments
 
 puts "\nAll #{$checks} checks passed."

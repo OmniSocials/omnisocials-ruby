@@ -279,7 +279,7 @@ module OmniSocials
       # escaped; spaces become %20 (a path segment treats "+" literally,
       # unlike a query string).
       def encode_id(conversation_id)
-        CGI.escape(conversation_id.to_s).gsub("+", "%20")
+        Internal.path_segment(conversation_id)
       end
     end
   end

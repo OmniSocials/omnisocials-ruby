@@ -35,10 +35,29 @@ module OmniSocials
         hash.reject { |_key, value| value.nil? || value.is_a?(NotGiven) }
       end
 
-      # URL-encode an id for use as one path segment. Spaces become %20 (a
-      # path segment treats "+" literally, unlike a query string).
+      # URL-encode a caller-supplied id as exactly one path segment. "/", "?",
+      # "#" and "%" are encoded too, so an id cannot add a segment, start a
+      # query or a fragment, or carry an escape of its own (an id such as
+      # "../webhooks/wh_1/rotate-secret#" would otherwise move the call to
+      # another endpoint of the same API key). Spaces become %20 (a path
+      # segment treats "+" literally, unlike a query string). Every id that
+      # goes into a request path goes through this method.
       def path_segment(value)
         CGI.escape(value.to_s).gsub("+", "%20")
+      end
+
+      # Refuse a request path with an empty, "." or ".." segment.
+      # path_segment leaves "." and ".." as they are, and URL normalization
+      # drops such a segment or climbs one level, so an id of ".." would reach
+      # another endpoint; an empty id would reach the list route. Raises
+      # ArgumentError before anything is sent.
+      def check_path(path)
+        segments = path.to_s.split("?", 2).first.to_s.split("/", -1).drop(1)
+        if segments.any? { |segment| segment.empty? || segment == "." || segment == ".." }
+          raise ArgumentError, "Invalid request path #{path.inspect}: an id cannot be empty, \".\" or \"..\"."
+        end
+
+        path
       end
 
       # Join an array into a comma-separated string; pass strings through.
