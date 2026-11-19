@@ -173,7 +173,8 @@ module OmniSocials
       # [...] } }, "limits" => { "max_sends" => 500 }, "platforms" =>
       # ["instagram", "facebook"] } (see automations.create for the
       # fields, also the actions "follow_gate", Follow first, which applies
-      # to the Instagram automation only). "platforms" makes one automation
+      # to the Instagram automation only, and "follow_up", the follow-up,
+      # which applies to both). "platforms" makes one automation
       # per listed channel; each
       # must be a channel of the post. Without it: Instagram when the post
       # goes there, else Facebook. Needs the automations:write scope on the
@@ -299,7 +300,8 @@ module OmniSocials
       # comment_dm_automation (same shape as on #create) as a Hash replaces
       # the post's comment-to-DM automations (a channel no longer in
       # "platforms" loses its automation), an explicit nil removes them all,
-      # and leaving it out keeps them. Needs the automations:write scope.
+      # and leaving it out keeps them. An "actions" without "follow_up"
+      # keeps the stored follow-up. Needs the automations:write scope.
       #
       # discord merges into the stored Discord options: a key set to nil
       # removes that option (e.g. discord: { "poll" => nil }), an explicit
