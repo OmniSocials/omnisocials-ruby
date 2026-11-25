@@ -701,6 +701,18 @@ while item["data"]
 end
 ```
 
+**Tag the commenter on Facebook.** On a Facebook comment, pass `mention_author: true` to `reply` and OmniSocials puts the tag `@[<commenter id>]` before your text: the reply starts with the commenter's name as a clickable link, and Facebook notifies them. Do not write the name or `@[id]` yourself. The answer then carries `mention` with `result["mention"]["status"]`: `tagged` (clickable tag), `plain_name` (Facebook did not accept the tag; the reply was edited to start with "@Name" as plain text), `failed` (the reply can show the raw `@[id]` text: delete it with `delete_message(result["data"]["id"])` and send it again without the option) or `unverified` (posted, but not checked). Only comments on the Facebook Page's own posts; any other conversation answers 400 `mention_not_supported` and nothing is sent.
+
+```ruby
+result = client.inbox.reply(
+  conversation_id,
+  text: "Thanks, we ship to Belgium too!",
+  message_id: message_id,
+  mention_author: true # Facebook comments only; do not write the name yourself
+)
+puts result["mention"]["message"] unless result["mention"]["status"] == "tagged"
+```
+
 Replying to an X DM costs 2 prepaid credits, debited from the company balance before the send and automatically refunded if the send fails:
 
 ```ruby

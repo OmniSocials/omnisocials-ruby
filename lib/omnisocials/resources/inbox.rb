@@ -113,14 +113,29 @@ module OmniSocials
       # using its default queue order and filters; nil when nothing is
       # waiting) and "remaining" in the response. Saves the extra call when
       # working through the inbox.
-      def reply(conversation_id, text: nil, attachment_url: nil, attachment_type: nil, message_id: nil, include_next: nil)
+      #
+      # Facebook comment replies: pass mention_author: true to tag the
+      # commenter. OmniSocials puts @[<commenter id>] before the text, so the
+      # reply starts with their name as a clickable link and Facebook
+      # notifies them; do not write the name yourself. The response then
+      # carries "mention" => { "status", "name", "message" }, where status is
+      # "tagged" (clickable tag, person notified), "plain_name" (Facebook did
+      # not accept the tag; the reply was edited to start with "@Name" as
+      # plain text), "failed" (the tag and the edit failed; the reply can
+      # show the raw @[id] text: delete it with delete_message(data["id"]) and send
+      # it again without mention_author) or "unverified" (posted, but the
+      # tag could not be checked). Any other conversation raises 400
+      # "mention_not_supported" and nothing is sent.
+      def reply(conversation_id, text: nil, attachment_url: nil, attachment_type: nil, message_id: nil,
+                include_next: nil, mention_author: nil)
         body = Internal.drop_nil(
           {
             "text" => text,
             "attachment_url" => attachment_url,
             "attachment_type" => attachment_type,
             "message_id" => message_id,
-            "include_next" => include_next
+            "include_next" => include_next,
+            "mention_author" => mention_author
           }
         )
         @client.request(

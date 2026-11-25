@@ -750,6 +750,16 @@ def check_body_building
   ok(base >= 0.375 && base <= 0.625, "backoff_delay attempt 0 is ~0.5s with jitter")
   later = OmniSocials::Internal.backoff_delay(10, nil)
   ok(later <= 8.0 * 1.25, "backoff_delay is capped at 8s (plus jitter)")
+
+  inbox = OmniSocials::Resources::Inbox.new(fake)
+  inbox.reply("fb_comment_1_2", text: "Thanks!", message_id: "104970331", mention_author: true)
+  ok(
+    fake.last.method == "POST" && fake.last.path == "/inbox/conversations/fb_comment_1_2/reply" &&
+      fake.last.json == { "text" => "Thanks!", "message_id" => "104970331", "mention_author" => true },
+    "inbox.reply sends mention_author"
+  )
+  inbox.reply("fb_comment_1_2", text: "Thanks!")
+  ok(fake.last.json == { "text" => "Thanks!" }, "inbox.reply leaves mention_author out when not given")
 end
 
 def check_tags_bodies(fake)
